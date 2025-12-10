@@ -1,6 +1,5 @@
 {
   "name": "Energy Core",
   "domain": "energy_core",
-  "content_in_root": true,
   "render_readme": true
 }
