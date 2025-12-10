@@ -2,7 +2,7 @@
 
 Home Assistant custom integration that standardises energy distribution KPIs and provides ready-to-use dashboard cards.
 
-## What this will provide (v1)
+## What this will provide (v0.1.1)
 - Core energy totals and derived splits based on:
   - Energy imported
   - Energy exported
