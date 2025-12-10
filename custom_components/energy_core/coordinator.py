@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Any
+from datetime import timedelta
+import logging
 
 from homeassistant.core import HomeAssistant
 from homeassistant.config_entries import ConfigEntry
@@ -18,6 +20,9 @@ from .const import (
     CONF_CO2_INTENSITY_ENTITY,
 )
 
+_LOGGER = logging.getLogger(__name__)
+
+
 @dataclass
 class EnergyInputs:
     imported_kwh: float = 0.0
@@ -32,9 +37,9 @@ class EnergyCoreCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     def __init__(self, hass: HomeAssistant, entry: ConfigEntry) -> None:
         super().__init__(
             hass,
-            logger=None,
+            logger=_LOGGER,
             name=DOMAIN,
-            update_interval=None,  # event-driven-ish; we rely on HA state changes later
+            update_interval=timedelta(seconds=60),
         )
         self.entry = entry
 

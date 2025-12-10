@@ -2,9 +2,21 @@
   "config": {
     "step": {
       "user": {
-        "title": "Homie Energy Core",
-        "description": "Select entities for inputs A–F."
+        "title": "Configure Homie Energy Core",
+        "description": "Select the sensors that represent your energy totals.\n\nYou may select multiple sensors per category.\nOnly select sensors with unit kWh or Wh. Do not select W (power) sensors.",
+        "data": {
+          "imported_entities": "Which sensor(s) measure energy imported from the grid?",
+          "exported_entities": "Which sensor(s) measure energy exported to the grid?",
+          "produced_entities": "Which sensor(s) measure total energy produced?",
+          "battery_charge_entities": "Which sensor(s) measure total battery charge energy?",
+          "battery_discharge_entities": "Which sensor(s) measure total battery discharge energy?",
+          "co2_intensity_entity": "Which sensor provides CO₂ intensity (g CO₂-eq/kWh)?",
+          "presence_entity": "Optional: which entity represents presence/occupancy?"
+        }
       }
+    },
+    "error": {
+      "invalid_unit": "Only sensors with unit kWh or Wh are allowed. Do not select W (power) sensors."
     }
   }
 }

@@ -2,9 +2,21 @@
   "config": {
     "step": {
       "user": {
-        "title": "Homie Energy Core",
-        "description": "Selecteer entiteiten voor inputs A–F."
+        "title": "Configureer Homie Energy Core",
+        "description": "Selecteer de sensoren die jouw energie-totalen representeren.\n\nJe mag meerdere sensoren per categorie kiezen.\nKies alleen sensoren met unit kWh of Wh. Kies geen W (vermogen) sensoren.",
+        "data": {
+          "imported_entities": "Welke sensor(en) meten energie-import uit het net?",
+          "exported_entities": "Welke sensor(en) meten energie-export naar het net?",
+          "produced_entities": "Welke sensor(en) meten totale energieproductie?",
+          "battery_charge_entities": "Welke sensor(en) meten totale batterij-laadenergie?",
+          "battery_discharge_entities": "Welke sensor(en) meten totale batterij-ontlaadenergie?",
+          "co2_intensity_entity": "Welke sensor geeft CO₂-intensiteit (g CO₂-eq/kWh)?",
+          "presence_entity": "Optioneel: welke entiteit representeert aanwezigheid/bezetting?"
+        }
       }
+    },
+    "error": {
+      "invalid_unit": "Je mag alleen sensoren met unit kWh of Wh kiezen. Kies geen W (vermogen) sensoren."
     }
   }
 }
