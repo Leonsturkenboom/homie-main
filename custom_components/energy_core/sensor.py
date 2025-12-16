@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Callable, Optional, List
+from typing import Any, Callable, Optional, List, Dict
 from datetime import datetime, timedelta
 import asyncio
 
@@ -43,28 +43,29 @@ def _clamp_min0(x: float) -> float:
     return x if x > 0 else 0.0
 
 
-def _calc_self_sufficiency_percent(c: EnergyCoreCoordinator) -> float:
-    d = _deltas(c)
-    denom = d.dA_imported_kwh + (d.dC_produced_kwh - d.dB_exported_kwh)
+def _calc_self_sufficiency_percent_from_parts(imported_kwh: float, produced_kwh: float, exported_kwh: float) -> float:
+    denom = imported_kwh + (produced_kwh - exported_kwh)
     if denom <= 0:
         return 0.0
-
-    ss = 1.0 - (d.dA_imported_kwh / denom)
+    ss = 1.0 - (imported_kwh / denom)
     ss = max(0.0, min(1.0, ss))
     return round(ss * 100.0, 2)
 
 
 @dataclass
 class ECDescription(SensorEntityDescription):
-    """Energy Core sensor description with a value function."""
+    """Energy Core sensor description with a value function and counter behavior."""
     value_fn: Callable[[EnergyCoreCoordinator], float] = lambda c: 0.0
+    allow_negative: bool = False  # whether period/lifetime sums may go below zero
+    include_period_counters: bool = True
+    include_overall_counter: bool = True  # overall = lifetime-like
 
 
 # -----------------------------
-# Base + derived DELTA sensors (kWh per interval)
+# Base + derived DELTA sensors (per-interval)
 # -----------------------------
 DESCRIPTIONS: list[ECDescription] = [
-    # Base deltas (dA..dE)
+    # Base deltas (kWh per interval)
     ECDescription(
         key="ec_imported_energy",
         name="EC Imported Energy",
@@ -73,6 +74,7 @@ DESCRIPTIONS: list[ECDescription] = [
         state_class=SensorStateClass.MEASUREMENT,
         native_unit_of_measurement="kWh",
         value_fn=lambda c: _deltas(c).dA_imported_kwh if _interval_valid(c) else 0.0,
+        allow_negative=False,
     ),
     ECDescription(
         key="ec_exported_energy",
@@ -82,6 +84,7 @@ DESCRIPTIONS: list[ECDescription] = [
         state_class=SensorStateClass.MEASUREMENT,
         native_unit_of_measurement="kWh",
         value_fn=lambda c: _deltas(c).dB_exported_kwh if _interval_valid(c) else 0.0,
+        allow_negative=False,
     ),
     ECDescription(
         key="ec_produced_energy",
@@ -91,6 +94,7 @@ DESCRIPTIONS: list[ECDescription] = [
         state_class=SensorStateClass.MEASUREMENT,
         native_unit_of_measurement="kWh",
         value_fn=lambda c: _deltas(c).dC_produced_kwh if _interval_valid(c) else 0.0,
+        allow_negative=False,
     ),
     ECDescription(
         key="ec_battery_charge_energy",
@@ -100,6 +104,7 @@ DESCRIPTIONS: list[ECDescription] = [
         state_class=SensorStateClass.MEASUREMENT,
         native_unit_of_measurement="kWh",
         value_fn=lambda c: _deltas(c).dD_charge_kwh if _interval_valid(c) else 0.0,
+        allow_negative=False,
     ),
     ECDescription(
         key="ec_battery_discharge_energy",
@@ -109,9 +114,10 @@ DESCRIPTIONS: list[ECDescription] = [
         state_class=SensorStateClass.MEASUREMENT,
         native_unit_of_measurement="kWh",
         value_fn=lambda c: _deltas(c).dE_discharge_kwh if _interval_valid(c) else 0.0,
+        allow_negative=False,
     ),
 
-    # Derived splits (per-interval allocation, based on deltas)
+    # Derived splits (kWh per interval)
     ECDescription(
         key="ec_self_consumed_energy",
         name="EC Self Consumed Energy",
@@ -120,10 +126,9 @@ DESCRIPTIONS: list[ECDescription] = [
         state_class=SensorStateClass.MEASUREMENT,
         native_unit_of_measurement="kWh",
         value_fn=lambda c: _clamp_min0(
-            _deltas(c).dC_produced_kwh
-            - _deltas(c).dB_exported_kwh
-            - _deltas(c).dD_charge_kwh
+            _deltas(c).dC_produced_kwh - _deltas(c).dB_exported_kwh - _deltas(c).dD_charge_kwh
         ) if _interval_valid(c) else 0.0,
+        allow_negative=False,
     ),
     ECDescription(
         key="ec_self_stored_energy",
@@ -136,6 +141,7 @@ DESCRIPTIONS: list[ECDescription] = [
             _deltas(c).dD_charge_kwh,
             _clamp_min0(_deltas(c).dC_produced_kwh - _deltas(c).dB_exported_kwh),
         ) if _interval_valid(c) else 0.0,
+        allow_negative=False,
     ),
     ECDescription(
         key="ec_imported_battery_energy",
@@ -145,9 +151,9 @@ DESCRIPTIONS: list[ECDescription] = [
         state_class=SensorStateClass.MEASUREMENT,
         native_unit_of_measurement="kWh",
         value_fn=lambda c: _clamp_min0(
-            _deltas(c).dD_charge_kwh
-            - _clamp_min0(_deltas(c).dC_produced_kwh - _deltas(c).dB_exported_kwh)
+            _deltas(c).dD_charge_kwh - _clamp_min0(_deltas(c).dC_produced_kwh - _deltas(c).dB_exported_kwh)
         ) if _interval_valid(c) else 0.0,
+        allow_negative=False,
     ),
     ECDescription(
         key="ec_exported_battery_energy",
@@ -157,6 +163,7 @@ DESCRIPTIONS: list[ECDescription] = [
         state_class=SensorStateClass.MEASUREMENT,
         native_unit_of_measurement="kWh",
         value_fn=lambda c: min(_deltas(c).dE_discharge_kwh, _deltas(c).dB_exported_kwh) if _interval_valid(c) else 0.0,
+        allow_negative=False,
     ),
     ECDescription(
         key="ec_self_consumed_battery_energy",
@@ -166,6 +173,7 @@ DESCRIPTIONS: list[ECDescription] = [
         state_class=SensorStateClass.MEASUREMENT,
         native_unit_of_measurement="kWh",
         value_fn=lambda c: _clamp_min0(_deltas(c).dE_discharge_kwh - _deltas(c).dB_exported_kwh) if _interval_valid(c) else 0.0,
+        allow_negative=False,
     ),
     ECDescription(
         key="ec_imported_residual_energy",
@@ -181,6 +189,7 @@ DESCRIPTIONS: list[ECDescription] = [
                 - _clamp_min0(_deltas(c).dC_produced_kwh - _deltas(c).dB_exported_kwh)
             )
         ) if _interval_valid(c) else 0.0,
+        allow_negative=False,
     ),
     ECDescription(
         key="ec_exported_residual_energy",
@@ -190,9 +199,10 @@ DESCRIPTIONS: list[ECDescription] = [
         state_class=SensorStateClass.MEASUREMENT,
         native_unit_of_measurement="kWh",
         value_fn=lambda c: _clamp_min0(_deltas(c).dB_exported_kwh - _deltas(c).dE_discharge_kwh) if _interval_valid(c) else 0.0,
+        allow_negative=False,
     ),
 
-    # KPIs based on deltas (accounting)
+    # Net KPIs (signed is allowed)
     ECDescription(
         key="ec_net_energy_use",
         name="EC Net Energy Use (On-site)",
@@ -203,24 +213,34 @@ DESCRIPTIONS: list[ECDescription] = [
         value_fn=lambda c: (
             _deltas(c).dA_imported_kwh + _deltas(c).dC_produced_kwh - _deltas(c).dB_exported_kwh
         ) if _interval_valid(c) else 0.0,
+        allow_negative=False,  # should not go negative in normal accounting
     ),
     ECDescription(
-        key="ec_net_energy_imported",
+        key="ec_net_energy_imported_grid",
         name="EC Net Energy Imported (Grid)",
         icon="mdi:swap-horizontal",
         device_class=SensorDeviceClass.ENERGY,
         state_class=SensorStateClass.MEASUREMENT,
         native_unit_of_measurement="kWh",
         value_fn=lambda c: (_deltas(c).dA_imported_kwh - _deltas(c).dB_exported_kwh) if _interval_valid(c) else 0.0,
+        allow_negative=True,
     ),
+
+    # Self sufficiency (ratio; do NOT sum percent for period/overall)
     ECDescription(
         key="ec_self_sufficiency",
         name="EC Self Sufficiency",
         icon="mdi:percent",
         state_class=SensorStateClass.MEASUREMENT,
         native_unit_of_measurement="%",
-        value_fn=lambda c: _calc_self_sufficiency_percent(c) if _interval_valid(c) else 0.0,
+        value_fn=lambda c: _calc_self_sufficiency_percent_from_parts(
+            _deltas(c).dA_imported_kwh, _deltas(c).dC_produced_kwh, _deltas(c).dB_exported_kwh
+        ) if _interval_valid(c) else 0.0,
+        include_period_counters=False,  # handled by dedicated ratio period sensor below
+        include_overall_counter=False,
     ),
+
+    # Emissions (signed allowed for net)
     ECDescription(
         key="ec_emissions_imported",
         name="EC Emissions Imported",
@@ -228,6 +248,7 @@ DESCRIPTIONS: list[ECDescription] = [
         state_class=SensorStateClass.MEASUREMENT,
         native_unit_of_measurement="g CO2-eq",
         value_fn=lambda c: (_deltas(c).dA_imported_kwh * _totals(c).co2_intensity_g_per_kwh) if _interval_valid(c) else 0.0,
+        allow_negative=False,
     ),
     ECDescription(
         key="ec_emissions_avoided",
@@ -236,6 +257,7 @@ DESCRIPTIONS: list[ECDescription] = [
         state_class=SensorStateClass.MEASUREMENT,
         native_unit_of_measurement="g CO2-eq",
         value_fn=lambda c: (_deltas(c).dB_exported_kwh * _totals(c).co2_intensity_g_per_kwh) if _interval_valid(c) else 0.0,
+        allow_negative=False,
     ),
     ECDescription(
         key="ec_emissions_net",
@@ -244,12 +266,13 @@ DESCRIPTIONS: list[ECDescription] = [
         state_class=SensorStateClass.MEASUREMENT,
         native_unit_of_measurement="g CO2-eq",
         value_fn=lambda c: ((_deltas(c).dA_imported_kwh - _deltas(c).dB_exported_kwh) * _totals(c).co2_intensity_g_per_kwh) if _interval_valid(c) else 0.0,
+        allow_negative=True,
     ),
 ]
 
 
 # -----------------------------
-# Period counter specs
+# Period counter specs (includes overall)
 # -----------------------------
 @dataclass
 class PeriodSpec:
@@ -260,6 +283,11 @@ class PeriodSpec:
 
 def _local_floor(now_utc: datetime) -> datetime:
     return dt_util.as_local(now_utc)
+
+
+def _start_overall(_: datetime) -> datetime:
+    # Constant bucket start => never resets => "overall"
+    return dt_util.as_utc(datetime(1970, 1, 1))
 
 
 def _start_15m(now_utc: datetime) -> datetime:
@@ -306,13 +334,14 @@ PERIODS: list[PeriodSpec] = [
     PeriodSpec(key="pweek", label="Week", start_fn=_start_week),
     PeriodSpec(key="pmonth", label="Month", start_fn=_start_month),
     PeriodSpec(key="pyear", label="Year", start_fn=_start_year),
+    PeriodSpec(key="poverall", label="Overall", start_fn=_start_overall),
 ]
 
 
 # -----------------------------
-# Persistent accumulator manager
+# Persistent accumulator store (generic)
 # -----------------------------
-class PeriodAccumulatorStore:
+class AccumulatorStore:
     """
     Stores per-sensor period accumulators so counters survive restarts.
 
@@ -330,7 +359,7 @@ class PeriodAccumulatorStore:
 
     def __init__(self, hass: HomeAssistant, entry_id: str) -> None:
         self.hass = hass
-        self._store = Store(hass, 1, f"{DOMAIN}.{entry_id}.period_accumulators")
+        self._store = Store(hass, 1, f"{DOMAIN}.{entry_id}.accumulators")
         self._data: dict[str, Any] = {}
         self._loaded = False
         self._lock = asyncio.Lock()
@@ -352,7 +381,7 @@ class PeriodAccumulatorStore:
 
 
 # -----------------------------
-# Entity classes
+# Base sensor
 # -----------------------------
 class EnergyCoreSensor(CoordinatorEntity[EnergyCoreCoordinator], SensorEntity):
     _attr_has_entity_name = True
@@ -385,20 +414,13 @@ class EnergyCoreSensor(CoordinatorEntity[EnergyCoreCoordinator], SensorEntity):
         }
 
 
-class EnergyCorePeriodCounterSensor(CoordinatorEntity[EnergyCoreCoordinator], SensorEntity):
-    """
-    Period counter that sums DELTA sensors over a bucket (15m/hour/day/week/month/year).
-    """
-
+# -----------------------------
+# Generic sum period counter (works for kWh and g CO2-eq; signed optional)
+# -----------------------------
+class EnergyCoreSumPeriodSensor(CoordinatorEntity[EnergyCoreCoordinator], SensorEntity):
     _attr_has_entity_name = True
 
-    def __init__(
-        self,
-        coordinator: EnergyCoreCoordinator,
-        base: ECDescription,
-        period: PeriodSpec,
-        store: PeriodAccumulatorStore,
-    ) -> None:
+    def __init__(self, coordinator: EnergyCoreCoordinator, base: ECDescription, period: PeriodSpec, store: AccumulatorStore) -> None:
         super().__init__(coordinator)
         self._base = base
         self._period = period
@@ -422,28 +444,20 @@ class EnergyCorePeriodCounterSensor(CoordinatorEntity[EnergyCoreCoordinator], Se
         await self._store.async_load()
 
         rec = self._store.get(self._base.key, self._period.key)
-        if not rec:
-            self._loaded = True
-            return
-
-        try:
-            start_raw = rec.get("start")
-            self._sum = float(rec.get("sum", 0.0))
-            self._last_seq = int(rec.get("last_seq", 0))
-            start = dt_util.parse_datetime(start_raw) if start_raw else None
-        except Exception:
-            start = None
-
-        if start is not None:
-            if start.tzinfo is None:
-                start = dt_util.as_utc(start)
-            else:
-                start = start.astimezone(dt_util.UTC)
-            self._period_start = start
+        if rec:
+            try:
+                start_raw = rec.get("start")
+                self._sum = float(rec.get("sum", 0.0))
+                self._last_seq = int(rec.get("last_seq", 0))
+                start = dt_util.parse_datetime(start_raw) if start_raw else None
+                if start is not None:
+                    self._period_start = start if start.tzinfo else dt_util.as_utc(start)
+            except Exception:
+                pass
 
         self._loaded = True
 
-    def _current_delta(self) -> float:
+    def _current_value(self) -> float:
         try:
             return float(self._base.value_fn(self.coordinator))
         except Exception:
@@ -463,21 +477,22 @@ class EnergyCorePeriodCounterSensor(CoordinatorEntity[EnergyCoreCoordinator], Se
 
         cur_seq = _seq(self.coordinator)
         if cur_seq != self._last_seq:
-            # Add only once per coordinator update
+            v = self._current_value()
+            if not self._base.allow_negative:
+                v = _clamp_min0(v)
+
             if _interval_valid(self.coordinator):
-                self._sum = round(self._sum + _clamp_min0(self._current_delta()), 6)
+                self._sum = round(self._sum + v, 6)
+
             self._last_seq = cur_seq
 
-            # Persist asynchronously
             if self._loaded:
                 rec = {
                     "start": self._period_start.isoformat() if self._period_start else None,
                     "sum": float(self._sum),
                     "last_seq": int(self._last_seq),
                 }
-                self.hass.async_create_task(
-                    self._store.async_set(self._base.key, self._period.key, rec)
-                )
+                self.hass.async_create_task(self._store.async_set(self._base.key, self._period.key, rec))
 
         return round(self._sum, 6)
 
@@ -492,6 +507,102 @@ class EnergyCorePeriodCounterSensor(CoordinatorEntity[EnergyCoreCoordinator], Se
 
 
 # -----------------------------
+# Self sufficiency period sensor (ratio over accumulated parts)
+# -----------------------------
+class EnergyCoreSelfSufficiencyPeriodSensor(CoordinatorEntity[EnergyCoreCoordinator], SensorEntity):
+    _attr_has_entity_name = True
+    _attr_icon = "mdi:percent"
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_native_unit_of_measurement = "%"
+
+    def __init__(self, coordinator: EnergyCoreCoordinator, period: PeriodSpec, store: AccumulatorStore) -> None:
+        super().__init__(coordinator)
+        self._period = period
+        self._store = store
+
+        self._attr_unique_id = f"{coordinator.entry.entry_id}_ec_self_sufficiency_{period.key}"
+        self._attr_name = f"EC Self Sufficiency {period.label}"
+
+        self._period_start: Optional[datetime] = None
+        self._sum_imported: float = 0.0
+        self._sum_produced: float = 0.0
+        self._sum_exported: float = 0.0
+        self._last_seq: int = 0
+        self._loaded = False
+
+        # Store under this base_key
+        self._base_key = "ec_self_sufficiency_ratio_parts"
+
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+        await self._store.async_load()
+
+        rec = self._store.get(self._base_key, self._period.key)
+        if rec:
+            try:
+                start_raw = rec.get("start")
+                self._sum_imported = float(rec.get("sum_imported", 0.0))
+                self._sum_produced = float(rec.get("sum_produced", 0.0))
+                self._sum_exported = float(rec.get("sum_exported", 0.0))
+                self._last_seq = int(rec.get("last_seq", 0))
+                start = dt_util.parse_datetime(start_raw) if start_raw else None
+                if start is not None:
+                    self._period_start = start if start.tzinfo else dt_util.as_utc(start)
+            except Exception:
+                pass
+
+        self._loaded = True
+
+    def _reset_if_needed(self, now: datetime) -> None:
+        start = self._period.start_fn(now)
+        if self._period_start != start:
+            self._period_start = start
+            self._sum_imported = 0.0
+            self._sum_produced = 0.0
+            self._sum_exported = 0.0
+            self._last_seq = 0
+
+    @property
+    def native_value(self) -> float:
+        now = dt_util.utcnow()
+        self._reset_if_needed(now)
+
+        cur_seq = _seq(self.coordinator)
+        if cur_seq != self._last_seq:
+            if _interval_valid(self.coordinator):
+                d = _deltas(self.coordinator)
+                self._sum_imported = round(self._sum_imported + max(0.0, d.dA_imported_kwh), 6)
+                self._sum_produced = round(self._sum_produced + max(0.0, d.dC_produced_kwh), 6)
+                self._sum_exported = round(self._sum_exported + max(0.0, d.dB_exported_kwh), 6)
+
+            self._last_seq = cur_seq
+
+            if self._loaded:
+                rec = {
+                    "start": self._period_start.isoformat() if self._period_start else None,
+                    "sum_imported": float(self._sum_imported),
+                    "sum_produced": float(self._sum_produced),
+                    "sum_exported": float(self._sum_exported),
+                    "last_seq": int(self._last_seq),
+                }
+                self.hass.async_create_task(self._store.async_set(self._base_key, self._period.key, rec))
+
+        return _calc_self_sufficiency_percent_from_parts(self._sum_imported, self._sum_produced, self._sum_exported)
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        return {
+            "period_key": self._period.key,
+            "period_label": self._period.label,
+            "period_start_utc": self._period_start.isoformat() if self._period_start else None,
+            "last_seq": self._last_seq,
+            "sum_imported_kwh": self._sum_imported,
+            "sum_produced_kwh": self._sum_produced,
+            "sum_exported_kwh": self._sum_exported,
+        }
+
+
+# -----------------------------
 # Setup
 # -----------------------------
 async def async_setup_entry(
@@ -501,16 +612,24 @@ async def async_setup_entry(
 ) -> None:
     coordinator: EnergyCoreCoordinator = hass.data[DOMAIN][entry.entry_id]
 
-    store = PeriodAccumulatorStore(hass, entry.entry_id)
+    store = AccumulatorStore(hass, entry.entry_id)
     await store.async_load()
 
     base_entities: List[SensorEntity] = [EnergyCoreSensor(coordinator, d) for d in DESCRIPTIONS]
 
-    counter_entities: List[SensorEntity] = []
-    for d in DESCRIPTIONS:
-        # Only build counters for ENERGY delta sensors (kWh)
-        if d.device_class == SensorDeviceClass.ENERGY and d.native_unit_of_measurement == "kWh":
-            for p in PERIODS:
-                counter_entities.append(EnergyCorePeriodCounterSensor(coordinator, d, p, store))
+    period_entities: List[SensorEntity] = []
 
-    async_add_entities(base_entities + counter_entities)
+    # Generic sum period counters for supported bases
+    for d in DESCRIPTIONS:
+        if not d.include_period_counters:
+            continue
+        for p in PERIODS:
+            if p.key == "poverall" and not d.include_overall_counter:
+                continue
+            period_entities.append(EnergyCoreSumPeriodSensor(coordinator, d, p, store))
+
+    # Dedicated ratio period sensors for self sufficiency (hour/day/week/month/year/overall)
+    for p in PERIODS:
+        period_entities.append(EnergyCoreSelfSufficiencyPeriodSensor(coordinator, p, store))
+
+    async_add_entities(base_entities + period_entities)
