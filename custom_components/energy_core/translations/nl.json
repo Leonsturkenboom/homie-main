@@ -3,20 +3,26 @@
     "step": {
       "user": {
         "title": "Configureer Homie Energy Core",
-        "description": "Selecteer de sensoren die jouw energie-totalen representeren.\n\nJe mag meerdere sensoren per categorie kiezen.\nKies alleen sensoren met unit kWh of Wh. Kies geen W (vermogen) sensoren.",
+        "description": "Selecteer de sensoren die jouw cumulatieve energie-totalen representeren.\n\nJe mag meerdere sensoren per categorie kiezen.\nKies alleen sensoren met unit kWh of Wh. Kies geen W (vermogen) sensoren.\n\nEnergieflows worden berekend op basis van interval-delta’s.",
         "data": {
           "imported_entities": "Welke sensor(en) meten energie-import uit het net?",
           "exported_entities": "Welke sensor(en) meten energie-export naar het net?",
           "produced_entities": "Welke sensor(en) meten totale energieproductie?",
           "battery_charge_entities": "Welke sensor(en) meten totale batterij-laadenergie?",
           "battery_discharge_entities": "Welke sensor(en) meten totale batterij-ontlaadenergie?",
+          "delta_interval_seconds": "Delta-berekeningsinterval (seconden)",
           "co2_intensity_entity": "Welke sensor geeft CO₂-intensiteit (g CO₂-eq/kWh)?",
-          "presence_entity": "Optioneel: welke entiteit representeert aanwezigheid/bezetting?"
+          "presence_entity": "Optioneel: welke entiteit representeert aanwezigheid / bezetting?"
         }
       }
     },
     "error": {
-      "invalid_unit": "Je mag alleen sensoren met unit kWh of Wh kiezen. Kies geen W (vermogen) sensoren."
+      "invalid_unit": "Je mag alleen sensoren met unit kWh of Wh kiezen. Kies geen W (vermogen) sensoren.",
+      "invalid_energy_entities": "Eén of meer geselecteerde sensoren zijn geen geldige energie-totalen: {entities}. Alleen cumulatieve kWh/Wh-sensoren worden ondersteund.",
+      "invalid_state_class": "Eén of meer sensoren hebben geen geldige state_class (total of total_increasing).",
+      "invalid_device_class": "Eén of meer sensoren hebben geen device_class 'energy'.",
+      "invalid_co2_unit": "De gekozen CO₂-intensiteitssensor lijkt geen unit per kWh te gebruiken (bijv. g CO₂/kWh).",
+      "invalid_config": "De configuratie is ongeldig. Controleer de bovenstaande velden."
     }
   }
 }

@@ -9,6 +9,7 @@ from .coordinator import EnergyCoreCoordinator
 
 PLATFORMS: list[Platform] = [Platform.SENSOR]
 
+
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     coordinator = EnergyCoreCoordinator(hass, entry)
     await coordinator.async_config_entry_first_refresh()
@@ -19,8 +20,17 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     return True
 
+
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
     if unload_ok:
-        hass.data[DOMAIN].pop(entry.entry_id)
+        domain_data = hass.data.get(DOMAIN, {})
+        domain_data.pop(entry.entry_id, None)
+        if not domain_data:
+            hass.data.pop(DOMAIN, None)
     return unload_ok
+
+
+async def async_reload_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    await async_unload_entry(hass, entry)
+    await async_setup_entry(hass, entry)

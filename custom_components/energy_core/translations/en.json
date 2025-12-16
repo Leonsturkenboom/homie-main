@@ -3,20 +3,26 @@
     "step": {
       "user": {
         "title": "Configure Homie Energy Core",
-        "description": "Select the sensors that represent your energy totals.\n\nYou may select multiple sensors per category.\nOnly select sensors with unit kWh or Wh. Do not select W (power) sensors.",
+        "description": "Select the sensors that represent your cumulative energy totals.\n\nYou may select multiple sensors per category.\nOnly select sensors with unit kWh or Wh. Do not select W (power) sensors.\n\nEnergy flows will be calculated using interval-based delta values.",
         "data": {
           "imported_entities": "Which sensor(s) measure energy imported from the grid?",
           "exported_entities": "Which sensor(s) measure energy exported to the grid?",
           "produced_entities": "Which sensor(s) measure total energy produced?",
           "battery_charge_entities": "Which sensor(s) measure total battery charge energy?",
           "battery_discharge_entities": "Which sensor(s) measure total battery discharge energy?",
+          "delta_interval_seconds": "Delta calculation interval (seconds)",
           "co2_intensity_entity": "Which sensor provides CO₂ intensity (g CO₂-eq/kWh)?",
-          "presence_entity": "Optional: which entity represents presence/occupancy?"
+          "presence_entity": "Optional: which entity represents presence / occupancy?"
         }
       }
     },
     "error": {
-      "invalid_unit": "Only sensors with unit kWh or Wh are allowed. Do not select W (power) sensors."
+      "invalid_unit": "Only sensors with unit kWh or Wh are allowed. Do not select W (power) sensors.",
+      "invalid_energy_entities": "One or more selected sensors are invalid energy meters: {entities}. Only cumulative kWh/Wh sensors are supported.",
+      "invalid_state_class": "One or more sensors do not have a valid state_class (total or total_increasing).",
+      "invalid_device_class": "One or more sensors do not have device_class 'energy'.",
+      "invalid_co2_unit": "The selected CO₂ intensity sensor does not appear to use a unit per kWh (e.g. g CO₂/kWh).",
+      "invalid_config": "The configuration is invalid. Please review the fields above."
     }
   }
 }

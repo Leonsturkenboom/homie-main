@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Callable, Optional, List
-from datetime import datetime, timedelta, time
+from typing import Any, Callable, Optional, List
+from datetime import datetime, timedelta
+import asyncio
 
 from homeassistant.components.sensor import (
     SensorEntity,
@@ -14,14 +15,28 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.storage import Store
 from homeassistant.util import dt as dt_util
 
 from .const import DOMAIN
-from .coordinator import EnergyCoreCoordinator, EnergyInputs
+from .coordinator import EnergyCoreCoordinator, EnergyDeltas, EnergyTotals
 
 
-def _inputs(coordinator: EnergyCoreCoordinator) -> EnergyInputs:
-    return coordinator.data.get("inputs")
+def _deltas(coordinator: EnergyCoreCoordinator) -> EnergyDeltas:
+    return coordinator.data.get("deltas")
+
+
+def _totals(coordinator: EnergyCoreCoordinator) -> EnergyTotals:
+    return coordinator.data.get("totals")
+
+
+def _seq(coordinator: EnergyCoreCoordinator) -> int:
+    return int(coordinator.data.get("seq", 0))
+
+
+def _interval_valid(coordinator: EnergyCoreCoordinator) -> bool:
+    d = _deltas(coordinator)
+    return bool(getattr(d, "valid", False))
 
 
 def _clamp_min0(x: float) -> float:
@@ -29,12 +44,12 @@ def _clamp_min0(x: float) -> float:
 
 
 def _calc_self_sufficiency_percent(c: EnergyCoreCoordinator) -> float:
-    i = _inputs(c)
-    denom = i.imported_kwh + (i.produced_kwh - i.exported_kwh)
+    d = _deltas(c)
+    denom = d.dA_imported_kwh + (d.dC_produced_kwh - d.dB_exported_kwh)
     if denom <= 0:
         return 0.0
 
-    ss = 1.0 - (i.imported_kwh / denom)
+    ss = 1.0 - (d.dA_imported_kwh / denom)
     ss = max(0.0, min(1.0, ss))
     return round(ss * 100.0, 2)
 
@@ -46,116 +61,138 @@ class ECDescription(SensorEntityDescription):
 
 
 # -----------------------------
-# Base + derived TOTAL sensors
+# Base + derived DELTA sensors (kWh per interval)
 # -----------------------------
 DESCRIPTIONS: list[ECDescription] = [
-    # Base totals from inputs
+    # Base deltas (dA..dE)
     ECDescription(
         key="ec_imported_energy",
         name="EC Imported Energy",
         icon="mdi:transmission-tower-import",
         device_class=SensorDeviceClass.ENERGY,
-        state_class=SensorStateClass.TOTAL_INCREASING,
+        state_class=SensorStateClass.MEASUREMENT,
         native_unit_of_measurement="kWh",
-        value_fn=lambda c: _inputs(c).imported_kwh,
+        value_fn=lambda c: _deltas(c).dA_imported_kwh if _interval_valid(c) else 0.0,
     ),
     ECDescription(
         key="ec_exported_energy",
         name="EC Exported Energy",
         icon="mdi:transmission-tower-export",
         device_class=SensorDeviceClass.ENERGY,
-        state_class=SensorStateClass.TOTAL_INCREASING,
+        state_class=SensorStateClass.MEASUREMENT,
         native_unit_of_measurement="kWh",
-        value_fn=lambda c: _inputs(c).exported_kwh,
+        value_fn=lambda c: _deltas(c).dB_exported_kwh if _interval_valid(c) else 0.0,
     ),
     ECDescription(
         key="ec_produced_energy",
         name="EC Produced Energy",
         icon="mdi:solar-power",
         device_class=SensorDeviceClass.ENERGY,
-        state_class=SensorStateClass.TOTAL_INCREASING,
+        state_class=SensorStateClass.MEASUREMENT,
         native_unit_of_measurement="kWh",
-        value_fn=lambda c: _inputs(c).produced_kwh,
+        value_fn=lambda c: _deltas(c).dC_produced_kwh if _interval_valid(c) else 0.0,
     ),
     ECDescription(
         key="ec_battery_charge_energy",
         name="EC Battery Charge Energy",
         icon="mdi:battery-arrow-up",
         device_class=SensorDeviceClass.ENERGY,
-        state_class=SensorStateClass.TOTAL_INCREASING,
+        state_class=SensorStateClass.MEASUREMENT,
         native_unit_of_measurement="kWh",
-        value_fn=lambda c: _inputs(c).battery_charge_kwh,
+        value_fn=lambda c: _deltas(c).dD_charge_kwh if _interval_valid(c) else 0.0,
     ),
     ECDescription(
         key="ec_battery_discharge_energy",
         name="EC Battery Discharge Energy",
         icon="mdi:battery-arrow-down",
         device_class=SensorDeviceClass.ENERGY,
-        state_class=SensorStateClass.TOTAL_INCREASING,
+        state_class=SensorStateClass.MEASUREMENT,
         native_unit_of_measurement="kWh",
-        value_fn=lambda c: _inputs(c).battery_discharge_kwh,
+        value_fn=lambda c: _deltas(c).dE_discharge_kwh if _interval_valid(c) else 0.0,
     ),
 
-    # Derived splits (input-only logic)
+    # Derived splits (per-interval allocation, based on deltas)
     ECDescription(
         key="ec_self_consumed_energy",
         name="EC Self Consumed Energy",
         icon="mdi:home-lightning-bolt",
         device_class=SensorDeviceClass.ENERGY,
-        state_class=SensorStateClass.TOTAL_INCREASING,
+        state_class=SensorStateClass.MEASUREMENT,
         native_unit_of_measurement="kWh",
         value_fn=lambda c: _clamp_min0(
-            _inputs(c).produced_kwh
-            - _inputs(c).exported_kwh
-            - _inputs(c).battery_charge_kwh
-        ),
+            _deltas(c).dC_produced_kwh
+            - _deltas(c).dB_exported_kwh
+            - _deltas(c).dD_charge_kwh
+        ) if _interval_valid(c) else 0.0,
     ),
     ECDescription(
         key="ec_self_stored_energy",
         name="EC Self Stored Energy",
         icon="mdi:battery-charging-70",
         device_class=SensorDeviceClass.ENERGY,
-        state_class=SensorStateClass.TOTAL_INCREASING,
+        state_class=SensorStateClass.MEASUREMENT,
         native_unit_of_measurement="kWh",
         value_fn=lambda c: min(
-            _inputs(c).battery_charge_kwh,
-            _clamp_min0(_inputs(c).produced_kwh - _inputs(c).exported_kwh),
-        ),
+            _deltas(c).dD_charge_kwh,
+            _clamp_min0(_deltas(c).dC_produced_kwh - _deltas(c).dB_exported_kwh),
+        ) if _interval_valid(c) else 0.0,
     ),
     ECDescription(
         key="ec_imported_battery_energy",
         name="EC Imported Battery Energy",
         icon="mdi:battery-charging",
         device_class=SensorDeviceClass.ENERGY,
-        state_class=SensorStateClass.TOTAL_INCREASING,
+        state_class=SensorStateClass.MEASUREMENT,
         native_unit_of_measurement="kWh",
         value_fn=lambda c: _clamp_min0(
-            _inputs(c).battery_charge_kwh
-            - _clamp_min0(_inputs(c).produced_kwh - _inputs(c).exported_kwh)
-        ),
+            _deltas(c).dD_charge_kwh
+            - _clamp_min0(_deltas(c).dC_produced_kwh - _deltas(c).dB_exported_kwh)
+        ) if _interval_valid(c) else 0.0,
     ),
     ECDescription(
         key="ec_exported_battery_energy",
         name="EC Exported Battery Energy",
         icon="mdi:battery-charging-wireless",
         device_class=SensorDeviceClass.ENERGY,
-        state_class=SensorStateClass.TOTAL_INCREASING,
+        state_class=SensorStateClass.MEASUREMENT,
         native_unit_of_measurement="kWh",
-        value_fn=lambda c: min(_inputs(c).battery_discharge_kwh, _inputs(c).exported_kwh),
+        value_fn=lambda c: min(_deltas(c).dE_discharge_kwh, _deltas(c).dB_exported_kwh) if _interval_valid(c) else 0.0,
     ),
     ECDescription(
-        key="ec_self_battery_energy",
-        name="EC Self Battery Energy",
+        key="ec_self_consumed_battery_energy",
+        name="EC Self Consumed Battery Energy",
         icon="mdi:battery",
         device_class=SensorDeviceClass.ENERGY,
-        state_class=SensorStateClass.TOTAL_INCREASING,
+        state_class=SensorStateClass.MEASUREMENT,
+        native_unit_of_measurement="kWh",
+        value_fn=lambda c: _clamp_min0(_deltas(c).dE_discharge_kwh - _deltas(c).dB_exported_kwh) if _interval_valid(c) else 0.0,
+    ),
+    ECDescription(
+        key="ec_imported_residual_energy",
+        name="EC Imported Residual Energy",
+        icon="mdi:transmission-tower-import",
+        device_class=SensorDeviceClass.ENERGY,
+        state_class=SensorStateClass.MEASUREMENT,
         native_unit_of_measurement="kWh",
         value_fn=lambda c: _clamp_min0(
-            _inputs(c).battery_discharge_kwh - _inputs(c).exported_kwh
-        ),
+            _deltas(c).dA_imported_kwh
+            - _clamp_min0(
+                _deltas(c).dD_charge_kwh
+                - _clamp_min0(_deltas(c).dC_produced_kwh - _deltas(c).dB_exported_kwh)
+            )
+        ) if _interval_valid(c) else 0.0,
+    ),
+    ECDescription(
+        key="ec_exported_residual_energy",
+        name="EC Exported Residual Energy",
+        icon="mdi:transmission-tower-export",
+        device_class=SensorDeviceClass.ENERGY,
+        state_class=SensorStateClass.MEASUREMENT,
+        native_unit_of_measurement="kWh",
+        value_fn=lambda c: _clamp_min0(_deltas(c).dB_exported_kwh - _deltas(c).dE_discharge_kwh) if _interval_valid(c) else 0.0,
     ),
 
-    # Net KPIs (point-in-time derived)
+    # KPIs based on deltas (accounting)
     ECDescription(
         key="ec_net_energy_use",
         name="EC Net Energy Use (On-site)",
@@ -164,39 +201,33 @@ DESCRIPTIONS: list[ECDescription] = [
         state_class=SensorStateClass.MEASUREMENT,
         native_unit_of_measurement="kWh",
         value_fn=lambda c: (
-            _inputs(c).imported_kwh + _inputs(c).produced_kwh - _inputs(c).exported_kwh
-        ),
+            _deltas(c).dA_imported_kwh + _deltas(c).dC_produced_kwh - _deltas(c).dB_exported_kwh
+        ) if _interval_valid(c) else 0.0,
     ),
     ECDescription(
-        key="ec_net_import_energy",
-        name="EC Net Import Energy (Grid)",
+        key="ec_net_energy_imported",
+        name="EC Net Energy Imported (Grid)",
         icon="mdi:swap-horizontal",
         device_class=SensorDeviceClass.ENERGY,
         state_class=SensorStateClass.MEASUREMENT,
         native_unit_of_measurement="kWh",
-        value_fn=lambda c: (_inputs(c).imported_kwh - _inputs(c).exported_kwh),
+        value_fn=lambda c: (_deltas(c).dA_imported_kwh - _deltas(c).dB_exported_kwh) if _interval_valid(c) else 0.0,
     ),
-
-    # Self sufficiency
     ECDescription(
         key="ec_self_sufficiency",
         name="EC Self Sufficiency",
         icon="mdi:percent",
         state_class=SensorStateClass.MEASUREMENT,
         native_unit_of_measurement="%",
-        value_fn=_calc_self_sufficiency_percent,
+        value_fn=lambda c: _calc_self_sufficiency_percent(c) if _interval_valid(c) else 0.0,
     ),
-
-    # Emissions (totals-style derived)
     ECDescription(
         key="ec_emissions_imported",
         name="EC Emissions Imported",
         icon="mdi:cloud-upload",
         state_class=SensorStateClass.MEASUREMENT,
         native_unit_of_measurement="g CO2-eq",
-        value_fn=lambda c: (
-            _inputs(c).imported_kwh * _inputs(c).co2_intensity_g_per_kwh
-        ),
+        value_fn=lambda c: (_deltas(c).dA_imported_kwh * _totals(c).co2_intensity_g_per_kwh) if _interval_valid(c) else 0.0,
     ),
     ECDescription(
         key="ec_emissions_avoided",
@@ -204,9 +235,7 @@ DESCRIPTIONS: list[ECDescription] = [
         icon="mdi:cloud-download",
         state_class=SensorStateClass.MEASUREMENT,
         native_unit_of_measurement="g CO2-eq",
-        value_fn=lambda c: (
-            _inputs(c).exported_kwh * _inputs(c).co2_intensity_g_per_kwh
-        ),
+        value_fn=lambda c: (_deltas(c).dB_exported_kwh * _totals(c).co2_intensity_g_per_kwh) if _interval_valid(c) else 0.0,
     ),
     ECDescription(
         key="ec_emissions_net",
@@ -214,10 +243,7 @@ DESCRIPTIONS: list[ECDescription] = [
         icon="mdi:cloud",
         state_class=SensorStateClass.MEASUREMENT,
         native_unit_of_measurement="g CO2-eq",
-        value_fn=lambda c: (
-            (_inputs(c).imported_kwh - _inputs(c).exported_kwh)
-            * _inputs(c).co2_intensity_g_per_kwh
-        ),
+        value_fn=lambda c: ((_deltas(c).dA_imported_kwh - _deltas(c).dB_exported_kwh) * _totals(c).co2_intensity_g_per_kwh) if _interval_valid(c) else 0.0,
     ),
 ]
 
@@ -257,7 +283,6 @@ def _start_day(now_utc: datetime) -> datetime:
 
 def _start_week(now_utc: datetime) -> datetime:
     nl = _local_floor(now_utc)
-    # Monday as start of week
     start_local = nl.replace(hour=0, minute=0, second=0, microsecond=0) - timedelta(days=nl.weekday())
     return dt_util.as_utc(start_local)
 
@@ -285,6 +310,48 @@ PERIODS: list[PeriodSpec] = [
 
 
 # -----------------------------
+# Persistent accumulator manager
+# -----------------------------
+class PeriodAccumulatorStore:
+    """
+    Stores per-sensor period accumulators so counters survive restarts.
+
+    Schema:
+    {
+      "<base_key>": {
+        "<period_key>": {
+          "start": "<iso>",
+          "sum": <float>,
+          "last_seq": <int>
+        }
+      }
+    }
+    """
+
+    def __init__(self, hass: HomeAssistant, entry_id: str) -> None:
+        self.hass = hass
+        self._store = Store(hass, 1, f"{DOMAIN}.{entry_id}.period_accumulators")
+        self._data: dict[str, Any] = {}
+        self._loaded = False
+        self._lock = asyncio.Lock()
+
+    async def async_load(self) -> None:
+        async with self._lock:
+            if self._loaded:
+                return
+            self._data = await self._store.async_load() or {}
+            self._loaded = True
+
+    def get(self, base_key: str, period_key: str) -> Optional[dict[str, Any]]:
+        return self._data.get(base_key, {}).get(period_key)
+
+    async def async_set(self, base_key: str, period_key: str, record: dict[str, Any]) -> None:
+        base = self._data.setdefault(base_key, {})
+        base[period_key] = record
+        await self._store.async_save(self._data)
+
+
+# -----------------------------
 # Entity classes
 # -----------------------------
 class EnergyCoreSensor(CoordinatorEntity[EnergyCoreCoordinator], SensorEntity):
@@ -308,9 +375,20 @@ class EnergyCoreSensor(CoordinatorEntity[EnergyCoreCoordinator], SensorEntity):
         except Exception:
             return 0.0
 
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        d = _deltas(self.coordinator)
+        return {
+            "interval_valid": bool(getattr(d, "valid", False)),
+            "interval_reason": getattr(d, "reason", None),
+            "seq": _seq(self.coordinator),
+        }
+
 
 class EnergyCorePeriodCounterSensor(CoordinatorEntity[EnergyCoreCoordinator], SensorEntity):
-    """Period delta counter for an underlying TOTAL_INCREASING energy sensor."""
+    """
+    Period counter that sums DELTA sensors over a bucket (15m/hour/day/week/month/year).
+    """
 
     _attr_has_entity_name = True
 
@@ -319,10 +397,12 @@ class EnergyCorePeriodCounterSensor(CoordinatorEntity[EnergyCoreCoordinator], Se
         coordinator: EnergyCoreCoordinator,
         base: ECDescription,
         period: PeriodSpec,
+        store: PeriodAccumulatorStore,
     ) -> None:
         super().__init__(coordinator)
         self._base = base
         self._period = period
+        self._store = store
 
         self._attr_unique_id = f"{coordinator.entry.entry_id}_{base.key}_{period.key}"
         self._attr_name = f"{base.name} {period.label}"
@@ -330,37 +410,84 @@ class EnergyCorePeriodCounterSensor(CoordinatorEntity[EnergyCoreCoordinator], Se
 
         self._attr_device_class = base.device_class
         self._attr_native_unit_of_measurement = base.native_unit_of_measurement
-        # Period counters are deltas within a time bucket
         self._attr_state_class = SensorStateClass.MEASUREMENT
 
-        self._baseline_start: Optional[datetime] = None
-        self._baseline_total: Optional[float] = None
+        self._period_start: Optional[datetime] = None
+        self._sum: float = 0.0
+        self._last_seq: int = 0
+        self._loaded = False
 
-    def _current_total(self) -> float:
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+        await self._store.async_load()
+
+        rec = self._store.get(self._base.key, self._period.key)
+        if not rec:
+            self._loaded = True
+            return
+
+        try:
+            start_raw = rec.get("start")
+            self._sum = float(rec.get("sum", 0.0))
+            self._last_seq = int(rec.get("last_seq", 0))
+            start = dt_util.parse_datetime(start_raw) if start_raw else None
+        except Exception:
+            start = None
+
+        if start is not None:
+            if start.tzinfo is None:
+                start = dt_util.as_utc(start)
+            else:
+                start = start.astimezone(dt_util.UTC)
+            self._period_start = start
+
+        self._loaded = True
+
+    def _current_delta(self) -> float:
         try:
             return float(self._base.value_fn(self.coordinator))
         except Exception:
             return 0.0
 
+    def _reset_if_needed(self, now: datetime) -> None:
+        start = self._period.start_fn(now)
+        if self._period_start != start:
+            self._period_start = start
+            self._sum = 0.0
+            self._last_seq = 0
+
     @property
     def native_value(self) -> float:
         now = dt_util.utcnow()
-        start = self._period.start_fn(now)
+        self._reset_if_needed(now)
 
-        if self._baseline_start != start or self._baseline_total is None:
-            self._baseline_start = start
-            self._baseline_total = self._current_total()
+        cur_seq = _seq(self.coordinator)
+        if cur_seq != self._last_seq:
+            # Add only once per coordinator update
+            if _interval_valid(self.coordinator):
+                self._sum = round(self._sum + _clamp_min0(self._current_delta()), 6)
+            self._last_seq = cur_seq
 
-        cur = self._current_total()
-        base = self._baseline_total or 0.0
-        return round(_clamp_min0(cur - base), 6)
+            # Persist asynchronously
+            if self._loaded:
+                rec = {
+                    "start": self._period_start.isoformat() if self._period_start else None,
+                    "sum": float(self._sum),
+                    "last_seq": int(self._last_seq),
+                }
+                self.hass.async_create_task(
+                    self._store.async_set(self._base.key, self._period.key, rec)
+                )
+
+        return round(self._sum, 6)
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
         return {
             "period_key": self._period.key,
             "period_label": self._period.label,
-            "period_start_utc": self._baseline_start.isoformat() if self._baseline_start else None,
+            "period_start_utc": self._period_start.isoformat() if self._period_start else None,
+            "last_seq": self._last_seq,
         }
 
 
@@ -374,18 +501,16 @@ async def async_setup_entry(
 ) -> None:
     coordinator: EnergyCoreCoordinator = hass.data[DOMAIN][entry.entry_id]
 
-    base_entities: List[SensorEntity] = [
-        EnergyCoreSensor(coordinator, d) for d in DESCRIPTIONS
-    ]
+    store = PeriodAccumulatorStore(hass, entry.entry_id)
+    await store.async_load()
 
-    # Counters for ENERGY sensors that are totals
+    base_entities: List[SensorEntity] = [EnergyCoreSensor(coordinator, d) for d in DESCRIPTIONS]
+
     counter_entities: List[SensorEntity] = []
     for d in DESCRIPTIONS:
-        if d.device_class == SensorDeviceClass.ENERGY and d.state_class in (
-            SensorStateClass.TOTAL,
-            SensorStateClass.TOTAL_INCREASING,
-        ):
+        # Only build counters for ENERGY delta sensors (kWh)
+        if d.device_class == SensorDeviceClass.ENERGY and d.native_unit_of_measurement == "kWh":
             for p in PERIODS:
-                counter_entities.append(EnergyCorePeriodCounterSensor(coordinator, d, p))
+                counter_entities.append(EnergyCorePeriodCounterSensor(coordinator, d, p, store))
 
     async_add_entities(base_entities + counter_entities)
