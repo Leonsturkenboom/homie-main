@@ -1,6 +1,6 @@
 {
   "name": "Homie Main",
   "content_in_root": false,
-  "render_readme": true,
-  "domains": ["homie_main"]
+  "domain": "homie_main",
+  "render_readme": true
 }
