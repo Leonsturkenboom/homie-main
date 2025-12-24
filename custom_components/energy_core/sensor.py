@@ -657,21 +657,24 @@ class EnergyCoreNotificationSensor(CoordinatorEntity[EnergyCoreCoordinator], Sen
             if presence_state:
                 presence_mode = presence_state.state
 
-        # Get all current sensor states for data gap detection
-        sensor_states = {
-            entity_id: self.hass.states.get(entity_id)
-            for entity_id in [
-                "sensor.ec_production_day",
-                "sensor.ec_consumption_day",
-                "sensor.ec_import_day",
-                "sensor.ec_export_day",
-            ]
+        # Get input entities from coordinator config for data gap detection
+        from .const import (
+            CONF_IMPORTED_ENTITIES,
+            CONF_EXPORTED_ENTITIES,
+            CONF_PRODUCED_ENTITIES,
+        )
+
+        input_entities = {
+            "imported": self.coordinator.entry.data.get(CONF_IMPORTED_ENTITIES, []),
+            "exported": self.coordinator.entry.data.get(CONF_EXPORTED_ENTITIES, []),
+            "produced": self.coordinator.entry.data.get(CONF_PRODUCED_ENTITIES, []),
         }
 
         # Get notification data from metrics store
         data = self.coordinator.metrics_store.get_notification_data(
+            self.hass,
             self.coordinator.data or {},
-            sensor_states
+            input_entities
         )
 
         # Get active notifications

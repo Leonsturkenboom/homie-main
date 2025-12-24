@@ -8,7 +8,7 @@ cards:
     show_state: true
     state_display: |
       [[[
-        const v = parseFloat(states['sensor.ec_net_energy_use_day']?.state ?? 0);
+        const v = parseFloat(states['sensor.ec_net_energy_use_on_site_day']?.state ?? 0);
         return `${v.toFixed(1)} kWh`;
       ]]]
 

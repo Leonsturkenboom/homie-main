@@ -28,7 +28,7 @@ entities:
   - type: section
     label: Net & KPIs
 
-  - entity: sensor.ec_net_energy_use
+  - entity: sensor.ec_net_energy_use_on_site
     name: Net on-site use
   - entity: sensor.ec_net_import_energy
     name: Net grid import

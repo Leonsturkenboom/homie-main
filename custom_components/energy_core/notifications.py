@@ -30,6 +30,30 @@ def _check_data_gap(data: dict) -> bool:
 
 def _check_self_sufficiency_record(data: dict) -> bool:
     """Check if today's self-sufficiency is a record."""
+    # Only give awards around 18:00 (17:00-19:00)
+    if not data.get("is_award_time", False):
+        return False
+
+    # Require sufficient history before giving awards
+    if not data.get("has_sufficient_history", False):
+        return False
+
+    # Require minimum activity: production or import >= 50% of 7-day average
+    production_today = data.get("production_today", 0)
+    production_7d_avg = data.get("production_7d_avg", 0)
+    net_use_today = data.get("net_use_today", 0)
+    net_use_7d_avg = data.get("net_use_7d_avg", 0)
+
+    # Check if either production or consumption is at least 50% of average
+    has_activity = False
+    if production_7d_avg > 0 and production_today >= (production_7d_avg * 0.5):
+        has_activity = True
+    if net_use_7d_avg > 0 and net_use_today >= (net_use_7d_avg * 0.5):
+        has_activity = True
+
+    if not has_activity:
+        return False
+
     ss_today = data.get("ss_today", 0)
     ss_max_last_30d = data.get("ss_max_last_30d", 0)
     return ss_today > ss_max_last_30d and ss_today > 0.7
@@ -82,15 +106,72 @@ def _check_baseload_trend_up_quarterly(data: dict) -> bool:
 
 def _check_co2_emissions_record(data: dict) -> bool:
     """Check if today's emissions are a record low."""
+    # Only give awards around 18:00 (17:00-19:00)
+    if not data.get("is_award_time", False):
+        return False
+
+    # Require sufficient history before giving awards
+    if not data.get("has_sufficient_history", False):
+        return False
+
+    # Require minimum activity: production or import >= 50% of 7-day average
+    production_today = data.get("production_today", 0)
+    production_7d_avg = data.get("production_7d_avg", 0)
+    net_use_today = data.get("net_use_today", 0)
+    net_use_7d_avg = data.get("net_use_7d_avg", 0)
+
+    # Check if either production or consumption is at least 50% of average
+    has_activity = False
+    if production_7d_avg > 0 and production_today >= (production_7d_avg * 0.5):
+        has_activity = True
+    if net_use_7d_avg > 0 and net_use_today >= (net_use_7d_avg * 0.5):
+        has_activity = True
+
+    if not has_activity:
+        return False
+
     emissions_today = data.get("emissions_today", 999999)
     emissions_min_last_30d = data.get("emissions_min_last_30d", 999999)
+
+    # Only award if we have meaningful emissions data
+    if emissions_today >= 999999 or emissions_min_last_30d >= 999999:
+        return False
+
     return emissions_today < emissions_min_last_30d
 
 
 def _check_net_energy_use_record(data: dict) -> bool:
     """Check if today's net energy use is a record low."""
-    net_use_today = data.get("net_use_today", 999999)
+    # Only give awards around 18:00 (17:00-19:00)
+    if not data.get("is_award_time", False):
+        return False
+
+    # Require sufficient history before giving awards
+    if not data.get("has_sufficient_history", False):
+        return False
+
+    # Require minimum activity: production or import >= 50% of 7-day average
+    production_today = data.get("production_today", 0)
+    production_7d_avg = data.get("production_7d_avg", 0)
+    net_use_today = data.get("net_use_today", 0)
+    net_use_7d_avg = data.get("net_use_7d_avg", 0)
+
+    # Check if either production or consumption is at least 50% of average
+    has_activity = False
+    if production_7d_avg > 0 and production_today >= (production_7d_avg * 0.5):
+        has_activity = True
+    if net_use_7d_avg > 0 and net_use_today >= (net_use_7d_avg * 0.5):
+        has_activity = True
+
+    if not has_activity:
+        return False
+
     net_use_min_last_30d = data.get("net_use_min_last_30d", 999999)
+
+    # Only award if we have meaningful usage data
+    if net_use_today >= 999999 or net_use_min_last_30d >= 999999:
+        return False
+
     return net_use_today < net_use_min_last_30d
 
 

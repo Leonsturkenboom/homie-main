@@ -211,45 +211,52 @@ class NotificationMetricsStore:
 
         return 0.0
 
-    def has_data_gap(self, sensor_states: dict[str, Any]) -> bool:
+    def has_data_gap(self, hass, input_entities: dict[str, list[str]]) -> bool:
         """
-        Check if any critical sensor has been unavailable for > 1 hour.
+        Check if any input sensor has been unavailable for > 1 hour.
 
         Args:
-            sensor_states: Dictionary mapping sensor entity_ids to their state objects
+            hass: Home Assistant instance
+            input_entities: Dictionary with keys like 'imported', 'exported', 'produced'
+                           mapping to lists of entity_ids
 
         Returns:
             True if any sensor has a data gap
         """
-        critical_sensors = [
-            "sensor.ec_production_day",
-            "sensor.ec_consumption_day",
-            "sensor.ec_import_day",
-            "sensor.ec_export_day",
-        ]
+        # Check all input entities from configuration
+        all_entities = []
+        for entity_list in input_entities.values():
+            if entity_list:
+                all_entities.extend(entity_list)
 
-        for sensor_id in critical_sensors:
-            state = sensor_states.get(sensor_id)
+        for entity_id in all_entities:
+            state = hass.states.get(entity_id)
             if not state:
-                continue
+                _LOGGER.warning(f"Data gap detected: {entity_id} not found")
+                return True
 
             if state.state in ["unavailable", "unknown"]:
                 # Check if last_changed is > 1 hour ago
                 if state.last_changed:
                     time_diff = dt_util.now() - state.last_changed
                     if time_diff > timedelta(hours=1):
-                        _LOGGER.warning(f"Data gap detected for {sensor_id}")
+                        _LOGGER.warning(f"Data gap detected for {entity_id}: unavailable for {time_diff}")
                         return True
+                else:
+                    # No last_changed means it's been unavailable since startup
+                    _LOGGER.warning(f"Data gap detected for {entity_id}: unavailable since startup")
+                    return True
 
         return False
 
-    def get_notification_data(self, coordinator_data: dict[str, Any], sensor_states: dict[str, Any]) -> dict[str, Any]:
+    def get_notification_data(self, hass, coordinator_data: dict[str, Any], input_entities: dict[str, list[str]]) -> dict[str, Any]:
         """
         Build complete notification data dictionary.
 
         Args:
+            hass: Home Assistant instance
             coordinator_data: Current data from coordinator
-            sensor_states: Current sensor states from hass
+            input_entities: Dictionary mapping entity types to lists of entity_ids
 
         Returns:
             Dictionary with all metrics needed for notifications
@@ -257,13 +264,18 @@ class NotificationMetricsStore:
         if not self._loaded:
             return {}
 
+        # Check if it's award time (17:00-19:00)
+        now = dt_util.now()
+        is_award_time = 17 <= now.hour < 19
+
         return {
-            # Data gap
-            "has_data_gap": self.has_data_gap(sensor_states),
+            # Data gap - now checks input entities instead of output sensors
+            "has_data_gap": self.has_data_gap(hass, input_entities),
 
             # Today's values
             "ss_today": self.get_today_value("self_sufficiency"),
             "net_use_today": self.get_today_value("net_use"),
+            "production_today": self.get_today_value("production"),
             "night_use_today": self.get_today_value("night_use"),
             "emissions_today": self.get_today_value("emissions"),
 
@@ -283,6 +295,12 @@ class NotificationMetricsStore:
             "ss_max_last_30d": self.get_max("self_sufficiency", 30),
             "emissions_min_last_30d": self.get_min("emissions", 30),
             "net_use_min_last_30d": self.get_min("net_use", 30),
+
+            # Data availability checks
+            "has_sufficient_history": len(self._data.get("daily_snapshots", [])) >= 7,
+
+            # Award timing (17:00-19:00)
+            "is_award_time": is_award_time,
 
             # Weekly trigger (set by coordinator based on day of week)
             "is_weekly_trigger": coordinator_data.get("is_weekly_trigger", False),
