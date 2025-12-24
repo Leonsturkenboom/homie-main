@@ -1,0 +1,7 @@
+type: entities
+title: Presence
+entities:
+  - entity: select.hm_home_status
+  - entity: sensor.hm_presence_source
+  - entity: binary_sensor.hm_manual_override_active
+  - entity: sensor.hm_manual_override_until

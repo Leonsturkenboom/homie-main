@@ -1,0 +1,10 @@
+type: grid
+columns: 2
+square: false
+cards:
+  - type: sensor
+    name: Use (kWh/day)
+    entity: sensor.hm_kpi_use_day_energy
+  - type: sensor
+    name: Solar (kWh/day)
+    entity: sensor.hm_kpi_solar_day_energy

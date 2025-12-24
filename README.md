@@ -1,300 +1,91 @@
-<p align="center">
-  <img src="logo.png" width="160" alt="Homie Energy Core logo">
-</p>
+# Homie Main
 
-# Homie Energy Core
+**Homie Main** is the central UX & orchestration layer of the Homie ecosystem for Home Assistant.
 
-Homie Energy Core is a Home Assistant custom integration that standardises **energy distribution KPIs** and provides **ready-to-use dashboard cards**, based on a robust and HA-safe calculation model.
+It is responsible for:
+- Presence orchestration (GPS / WiFi / Motion / Calendar)
+- User-configurable notifications
+- Health & data-gap monitoring
+- KPI visualization passthrough (power, energy, price)
+- A clean, install-once / configure-later experience
 
-The integration is intentionally lightweight and deterministic:  
-**energy meters are treated as the source of truth**, and all energy flows are calculated using **interval-based delta values**.
-
----
-
-## Core concept (important)
-
-Energy Core does **not** calculate energy from power (W).
-
-Instead:
-- All input sensors are **cumulative energy totals** (kWh / Wh)
-- Energy Core calculates **delta values per fixed interval**
-- All base outputs represent **energy per interval**
-- Period totals are built by **summing those deltas**
-
-This approach:
-- avoids power sampling errors
-- survives restarts safely
-- does not rely on HA statistics
-- produces stable, reproducible results
-- prevents historical bias and double-counting
+This integration is designed to be:
+- ✅ Wizard-only (no input_* helpers)
+- ✅ HACS installable
+- ✅ Installer-proof, user-friendly
+- ✅ Scalable to multiple homes/sites
 
 ---
 
-## What this integration provides
+## ✨ Features
 
-### Core energy deltas (per interval)
-
-These sensors represent **energy during the last calculation interval**
-(**kWh per interval**, not cumulative totals):
-
-- **EC Imported Energy**
-- **EC Exported Energy**
-- **EC Produced Energy**
-- **EC Battery Charge Energy**
-- **EC Battery Discharge Energy**
-- **EC Net Battery Flow** (positive = discharging, negative = charging)
-
-> These sensors reset every interval by design.
-> They are intended as building blocks for period counters and dashboards.
->
-> **Note**: Net Battery Flow can be negative (charging) or positive (discharging), making it ideal for distribution graphs. Period counters are only available for 15min, hour, and day periods.
+- Presence detection via:
+  - GPS (persons / device_trackers)
+  - WiFi (device_trackers)
+  - Motion (binary_sensors)
+  - Calendar (`calendar.homie`)
+- Manual override logic (until next midnight)
+- Push & notification management (user editable)
+- Health warnings when data sources become unavailable
+- KPI passthrough sensors for dashboards
+- YAML dashboards & cards included
 
 ---
 
-### Derived energy distribution (per interval)
+## 📦 Installation (HACS)
 
-Calculated from the delta values:
-
-- **EC Self Consumed Energy** (production → home)
-- **EC Self Stored Energy** (production → battery)
-- **EC Imported Battery Energy** (grid → battery)
-- **EC Exported Battery Energy** (battery → grid)
-- **EC Self Consumed Battery Energy** (battery → home)
-- **EC Imported Residual Energy**
-- **EC Exported Residual Energy**
-
-All values represent **kWh during the interval**.
+1. Open **HACS**
+2. Add this repository as a **Custom Repository**
+3. Category: **Integration**
+4. Install **Homie Main**
+5. Restart Home Assistant
 
 ---
 
-### Net KPIs (accounting-based)
+## 🧙 Initial Setup (Installer)
 
-- **EC Net Energy Use (On-site)**
-- **EC Net Energy Imported (Grid)**
-
-These KPIs represent **energy accounting**, not instantaneous physical flows.  
-Negative values are valid and expected in net-export scenarios.
-
----
-
-### Self-sufficiency
-
-- **EC Self Sufficiency (%)**
-
-Calculated from interval deltas.  
-For period and lifetime values, the ratio is recomputed from accumulated energy parts  
-(**never by averaging percentages**).
-
----
-
-### Emissions (optional)
-
-Based on the selected CO₂ intensity sensor:
-
-- **EC Emissions Imported**
-- **EC Emissions Avoided**
-- **EC Emissions Net**
-
-Units: **g CO₂-eq per interval**
-
-Negative values for *Net* emissions indicate avoided emissions.
-
----
-
-## Built-in period counters (always included)
-
-For **every EC energy and emissions sensor**, Energy Core automatically generates:
-
-- 15 minutes
-- Hour
-- Day
-- Week
-- Month
-- Year
-- **Overall (lifetime)**
-
-**Exception**: **EC Net Battery Flow** only generates period counters for:
-- 15 minutes
-- Hour
-- Day
-
-(Week/month/year/overall counters for net flow are not meaningful since positive and negative values would cancel out)
-
-These counters:
-- **sum interval-based delta values**
-- are **restart-safe**
-- do **not rely on Home Assistant statistics**
-- accumulate **once per calculation interval**
-- never double-count data
-
-### Self-sufficiency period counters
-Self-sufficiency also includes:
-- Hour / Day / Week / Month / Year / **Overall**
-
-These are calculated correctly as **ratios over accumulated energy**, not summed percentages.
-
----
-
-## Required inputs
-
-You may select **multiple entities per category**.
-
-Required:
-- **Energy imported** (kWh or Wh, cumulative)
-- **Energy exported** (kWh or Wh, cumulative)
-- **Energy produced** (kWh or Wh, cumulative)
-- **Battery charge energy** (kWh or Wh, cumulative)
-- **Battery discharge energy** (kWh or Wh, cumulative)
-- **CO₂ intensity** (g CO₂-eq / kWh)
-
-Optional:
-- **Presence / occupancy entity** (for future coaching and notifications)
-
----
-
-## Configuration
-
-After installing:
-
+After installation:
 1. Go to **Settings → Devices & Services**
-2. Add **Homie Energy Core**
-3. Select your input sensors
-4. Choose the **delta calculation interval** (default: 300 seconds)
+2. Add integration **Homie Main**
+3. Follow the wizard:
+   - Site name
+   - Presence detection type (GPS / WiFi / Motion / Calendar)
+   - Select relevant entities
+   - Confirm
 
-The configuration wizard:
-- allows multiple sensors per category
-- validates **kWh / Wh** units
-- prevents selection of **W (power)** sensors
-- checks `device_class` and `state_class`
-- prevents accidental double-counting
-
----
-
-## Dashboard cards
-
-Energy Core includes ready-to-copy YAML dashboard cards:
-
-- Energy distribution
-- Daily energy balance
-- Weekly energy balance
-- Monthly energy balance
-- Yearly energy balance
-- Overall energy balance
-
-All graphs are configured to **sum interval values**, not average them.
-
-Cards can be found in: /cards
+⚠️ **Presence mode is locked after installation**  
+This is intentional and prevents accidental architectural changes.
 
 ---
 
-## Notifications
+## ⚙️ User Configuration (After Install)
 
-Energy Core includes smart notification sensors that monitor your energy patterns and alert you to:
-- **Warnings**: High consumption, data gaps, rising baseload
-- **Awards**: Self-sufficiency records, low emissions, low consumption
-- **Tips**: Reduce export, weekly improvement goals
+Users can later change (without reinstalling):
+- Notifications on/off
+- Push notifications on/off
+- Notification levels
+- KPI entity mapping
+- Notify target (`notify.notify` by default)
 
-### Setup
-
-1. **Create notification toggle** (via UI or YAML):
-   ```yaml
-   input_boolean:
-     ec_notifications_enabled:
-       name: EC Notifications Enabled
-       initial: on
-   ```
-
-2. **Add notification board** to your dashboard:
-   - Install `auto-entities` from HACS
-   - Copy `/cards/notifications_board.yaml` to your dashboard
-
-All notifications:
-- Tagged with `tag: "Homie"` for easy filtering
-- Hidden when `input_boolean.ec_notifications_enabled` is OFF
-- Respect holiday mode (awards/tips only)
-- Support Dutch + English
+Via:
+- **Settings → Devices & Services → Homie Main → Options**
+- Or directly via exposed switch/select entities
 
 ---
 
-## Installation (HACS)
+## 🔔 Notifications
 
-1. Add this repository as a **custom integration** in HACS
-2. Install and restart Home Assistant
-3. Add **Homie Energy Core** via **Settings → Devices & Services**
-4. Copy dashboard cards from `/cards` into your dashboard
+- Persistent notifications are always created (audit trail)
+- Push notifications:
+  - Default target: `notify.notify` (all apps)
+  - Can be overridden via options
+- Warnings are rate-limited (default: once per 6 hours)
 
----
-
-## Design goals
-
-- Deterministic energy accounting
-- Standardised naming and outputs
-- Minimal configuration effort
-- Restart-safe calculations
-- HA-aligned performance characteristics
-- Dashboard- and automation-friendly outputs
-
----
-
-## Version history
-
-### 0.4.1
-- **Added EC Net Battery Flow sensor**: Combined battery flow sensor that can be positive (discharging) or negative (charging)
-  - Perfect for distribution graphs showing battery behavior
-  - Period counters available for 15min, hour, and day only
-  - Calculation: discharge - charge (positive = discharging to consumption)
-- Added `period_keys` field to ECDescription for selective period counter creation
-- Improves battery visualization in energy distribution dashboards
-
-### 0.4.0
-- **Added Notification System**: 11 intelligent notification types for energy monitoring
-  - Warnings: Data gaps, consumption spikes (2x/4x daily avg), high night consumption, rising baseload
-  - Awards: Records in self-sufficiency, CO2 emissions, and energy use
-  - Tips: Reduce export suggestions, weekly improvement goals
-- **Added NotificationMetricsStore**: Lightweight 90-day historical data tracking
-  - Automatic daily snapshots at midnight
-  - Rolling averages (7d, 30d, 90d) for trend detection
-  - Min/max tracking for record comparison
-- **Holiday Mode Suppression**: Info/award notifications auto-suppressed during holidays
-- **Multi-language Support**: Notifications in Dutch and English
-- **Notification Toggle**: Respects `input_boolean.ec_notifications_enabled`
-- Added notifications board card with auto-entities filtering
-- All notification sensors tagged with "Homie" for easy dashboard integration
-
-### 0.3.3
-- Hardened interval-based delta engine against sensor glitches
-- Prevented energy spikes caused by `unknown` / `unavailable` input states
-- Invalid intervals no longer update baselines or accumulators
-- Added explicit `interval_valid` and `interval_reason` attributes
-- Switched all emissions outputs from **g CO₂-eq** to **kg CO₂-eq**
-- Emissions calculations now divide CO₂ intensity (g/kWh) by 1000
-- Period and overall emission counters now accumulate **kg CO₂-eq**
-- Ensured day/month/year/overall counters cannot be corrupted by restarts or meter resets
-
-### 0.3.2
-- Hardened interval-based delta engine against sensor glitches
-- Prevented energy spikes caused by unknown / unavailable input states
-- Invalid intervals no longer update baselines or accumulators
-- Added explicit interval_valid and interval_reason attributes
-
-### 0.3.1 / 0.3.2
-- Added **Overall (lifetime)** counters
-- Added period counters for **emissions**
-- Added ratio-correct period counters for **self sufficiency**
-- Added repository icon and logo
-
-### 0.3.0
-- Switched to **interval-based delta energy model**
-- All EC sensors now represent **kWh per interval**
-- Restart-safe accumulators
-- No reliance on HA statistics
-- Prevents historical bias and double-counting
-
-### 0.2.x
-- Cumulative energy totals with derived counters
-- Persistent baselines for period counters
-
-### 0.1.x
-- Initial Energy Core sensors
-- Unit validation in config wizard
-- First dashboard card templates
+Recommended (optional):
+```yaml
+notify:
+  - platform: group
+    name: homie_all_apps
+    services:
+      - service: mobile_app_phone_1
+      - service: mobile_app_phone_2

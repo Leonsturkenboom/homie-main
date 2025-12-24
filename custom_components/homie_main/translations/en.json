@@ -1,0 +1,40 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Homie Main setup",
+        "description": "Configure the core behavior for this site.",
+        "data": {
+          "site_name": "Site name",
+          "presence_mode": "Presence detection type"
+        }
+      },
+      "presence_inputs": {
+        "title": "Presence configuration",
+        "description": "Select the entities used for presence detection.",
+        "data": {
+          "calendar_entity": "Calendar entity",
+          "gps_entities": "GPS presence entities",
+          "wifi_entities": "WiFi presence entities",
+          "motion_entities": "Motion sensors"
+        }
+      }
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Homie Main options",
+        "description": "Adjust user settings and KPI mappings.",
+        "data": {
+          "notifications_enabled": "Enable notifications",
+          "push_enabled": "Enable push notifications",
+          "email_enabled": "Enable email notifications",
+          "notification_level": "Notification level",
+          "push_level": "Push notification level",
+          "notify_target": "Notify service target"
+        }
+      }
+    }
+  }
+}

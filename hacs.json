@@ -1,5 +1,6 @@
 {
-  "name": "Energy Core",
-  "domain": "energy_core",
-  "render_readme": true
+  "name": "Homie Main",
+  "content_in_root": false,
+  "render_readme": true,
+  "domains": ["homie_main"]
 }

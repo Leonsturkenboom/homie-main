@@ -1,0 +1,6 @@
+type: entities
+title: Health
+entities:
+  - entity: binary_sensor.hm_data_gap_presence
+  - entity: binary_sensor.hm_data_gap_calendar
+  - entity: binary_sensor.hm_data_gap_main

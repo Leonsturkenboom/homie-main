@@ -1,0 +1,3 @@
+type: sensor
+name: Purchase price
+entity: sensor.hm_kpi_purchase_price

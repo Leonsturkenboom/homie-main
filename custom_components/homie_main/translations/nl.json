@@ -1,0 +1,40 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Homie Main installatie",
+        "description": "Configureer het basisgedrag voor deze locatie.",
+        "data": {
+          "site_name": "Naam van locatie",
+          "presence_mode": "Type aanwezigheid detectie"
+        }
+      },
+      "presence_inputs": {
+        "title": "Aanwezigheid configuratie",
+        "description": "Selecteer de entiteiten die gebruikt worden voor aanwezigheid.",
+        "data": {
+          "calendar_entity": "Agenda-entiteit",
+          "gps_entities": "GPS-aanwezigheidsentiteiten",
+          "wifi_entities": "WiFi-aanwezigheidsentiteiten",
+          "motion_entities": "Bewegingssensoren"
+        }
+      }
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Homie Main instellingen",
+        "description": "Pas gebruikersinstellingen en KPI-koppelingen aan.",
+        "data": {
+          "notifications_enabled": "Notificaties inschakelen",
+          "push_enabled": "Pushmeldingen inschakelen",
+          "email_enabled": "E-mailmeldingen inschakelen",
+          "notification_level": "Notificatieniveau",
+          "push_level": "Push-notificatieniveau",
+          "notify_target": "Notificatie service"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,45 @@
+notify:
+  name: Homie notify
+  description: Publish a Homie-tagged notification to the Homie feed and optionally send push/persistent notifications.
+  fields:
+    title:
+      name: Title
+      example: "Energy warning"
+      required: true
+      selector:
+        text:
+    message:
+      name: Message
+      example: "PV data is unavailable > 1 hour."
+      required: true
+      selector:
+        text:
+    level:
+      name: Level
+      example: "warning"
+      required: false
+      selector:
+        select:
+          options:
+            - "info"
+            - "tip"
+            - "warning"
+            - "alert"
+    source:
+      name: Source
+      example: "energy_core"
+      required: false
+      selector:
+        text:
+    push:
+      name: Send push
+      required: false
+      default: true
+      selector:
+        boolean:
+    persistent:
+      name: Create persistent notification
+      required: false
+      default: true
+      selector:
+        boolean:
