@@ -1,10 +1,10 @@
 {
   "domain": "homie_main",
   "name": "Homie Main",
-  "version": "0.2.0",
-  "documentation": "https://github.com/<you>/homie-main",
-  "issue_tracker": "https://github.com/<you>/homie-main/issues",
-  "codeowners": ["@<you>"],
+  "version": "0.2.2",
+  "documentation": "https://github.com/Leonsturkenboom/homie-main",
+  "issue_tracker": "https://github.com/Leonsturkenboom/homie-main/issues",
+  "codeowners": ["@Leonsturkenboom"],
   "config_flow": true,
   "iot_class": "local_polling",
   "requirements": ["aiosmtplib==3.0.2"]
