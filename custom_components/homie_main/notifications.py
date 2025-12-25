@@ -1,5 +1,9 @@
+# custom_components/homie_main/notifications.py
+"""Notification system for Homie Main integration."""
+
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from collections import deque
 from email.message import EmailMessage
@@ -15,12 +19,16 @@ from .const import (
     OPT_NOTIFICATIONS_ENABLED,
     OPT_PUSH_ENABLED,
     OPT_EMAIL_ENABLED,
+    OPT_NOTIFICATION_LEVEL,
+    OPT_PUSH_LEVEL,
     OPT_NOTIFY_TARGET_PUSH,
     DEFAULT_NOTIFICATIONS_ENABLED,
     DEFAULT_PUSH_ENABLED,
     DEFAULT_EMAIL_ENABLED,
+    DEFAULT_NOTIFICATION_LEVEL,
+    DEFAULT_PUSH_LEVEL,
     DEFAULT_NOTIFY_TARGET_PUSH,
-    # smtp
+    # SMTP
     OPT_SMTP_HOST,
     OPT_SMTP_PORT,
     OPT_SMTP_STARTTLS,
@@ -28,7 +36,8 @@ from .const import (
     OPT_SMTP_USERNAME,
     OPT_SMTP_PASSWORD,
     OPT_SMTP_FROM,
-    OPT_SMTP_TO,
+    OPT_SMTP_TO_WARNINGS,
+    OPT_SMTP_TO_ALERTS,
     DEFAULT_SMTP_HOST,
     DEFAULT_SMTP_PORT,
     DEFAULT_SMTP_STARTTLS,
@@ -36,15 +45,22 @@ from .const import (
     DEFAULT_SMTP_USERNAME,
     DEFAULT_SMTP_PASSWORD,
     DEFAULT_SMTP_FROM,
-    DEFAULT_SMTP_TO,
+    DEFAULT_SMTP_TO_WARNINGS,
+    DEFAULT_SMTP_TO_ALERTS,
+    # Others
+    EVENT_HOMIE_NOTIFICATION,
+    NOTIFICATION_STORE_KEY,
+    NOTIFICATION_HISTORY_SIZE,
+    LEVEL_HIERARCHY,
 )
 
-EVENT_HOMIE_NOTIFICATION = "homie_notification"
-STORE_KEY = "homie_notification_store"
+_LOGGER = logging.getLogger(__name__)
 
 
 @dataclass
 class HomieNotification:
+    """Represents a notification in the Homie system."""
+
     ts: str
     level: str
     title: str
@@ -54,39 +70,80 @@ class HomieNotification:
 
 
 def _now_iso() -> str:
+    """Return current UTC time as ISO string."""
     return dt_util.utcnow().isoformat()
 
 
 def _normalize_level(level: str | None) -> str:
+    """Normalize notification level to lowercase."""
     if not level:
         return "info"
     return str(level).strip().lower()
 
 
 def _parse_recipients(raw: str) -> list[str]:
+    """Parse comma-separated email recipients."""
     if not raw:
         return []
     return [x.strip() for x in raw.split(",") if x.strip()]
 
 
+def _get_smtp_recipients(level: str, entry_options: dict[str, Any]) -> list[str]:
+    """Determine SMTP recipients based on notification level.
+
+    Warnings go to TO_WARNINGS, Alerts go to TO_ALERTS.
+    """
+    level_lower = _normalize_level(level)
+
+    # Alerts go to TO_ALERTS
+    if level_lower == "alert":
+        to_raw = entry_options.get(OPT_SMTP_TO_ALERTS, DEFAULT_SMTP_TO_ALERTS)
+        return _parse_recipients(to_raw)
+
+    # Warnings and below go to TO_WARNINGS
+    to_raw = entry_options.get(OPT_SMTP_TO_WARNINGS, DEFAULT_SMTP_TO_WARNINGS)
+    return _parse_recipients(to_raw)
+
+
+def _should_send_by_level(
+    level: str, threshold_level: str
+) -> bool:
+    """Check if notification should be sent based on level threshold."""
+    if threshold_level == "All":
+        return True
+
+    level_value = LEVEL_HIERARCHY.get(_normalize_level(level), 0)
+    threshold_value = LEVEL_HIERARCHY.get(_normalize_level(threshold_level), 999)
+
+    return level_value >= threshold_value
+
+
 async def async_setup_notifications(hass: HomeAssistant) -> None:
-    if STORE_KEY not in hass.data:
-        hass.data[STORE_KEY] = {"items": deque(maxlen=100)}
+    """Setup the Homie notification system."""
+    if NOTIFICATION_STORE_KEY not in hass.data:
+        hass.data[NOTIFICATION_STORE_KEY] = {
+            "items": deque(maxlen=NOTIFICATION_HISTORY_SIZE)
+        }
 
     @callback
     def _append(item: HomieNotification) -> None:
-        hass.data[STORE_KEY]["items"].appendleft(item)
+        """Add notification to history."""
+        hass.data[NOTIFICATION_STORE_KEY]["items"].appendleft(item)
 
     async def _call_notify_service(target: str, payload: dict[str, Any]) -> None:
+        """Call a notification service safely."""
         if not target or "." not in target:
             return
         domain, service = target.split(".", 1)
         try:
             await hass.services.async_call(domain, service, payload, blocking=False)
-        except Exception:
-            return
+        except Exception as err:
+            _LOGGER.warning("Failed to call notify service %s: %s", target, err)
 
-    async def _send_smtp_email(entry_options: dict[str, Any], subject: str, body: str) -> None:
+    async def _send_smtp_email(
+        entry_options: dict[str, Any], level: str, subject: str, body: str
+    ) -> None:
+        """Send email notification via SMTP."""
         host = str(entry_options.get(OPT_SMTP_HOST, DEFAULT_SMTP_HOST)).strip()
         port = int(entry_options.get(OPT_SMTP_PORT, DEFAULT_SMTP_PORT))
         starttls = bool(entry_options.get(OPT_SMTP_STARTTLS, DEFAULT_SMTP_STARTTLS))
@@ -94,11 +151,13 @@ async def async_setup_notifications(hass: HomeAssistant) -> None:
         username = str(entry_options.get(OPT_SMTP_USERNAME, DEFAULT_SMTP_USERNAME))
         password = str(entry_options.get(OPT_SMTP_PASSWORD, DEFAULT_SMTP_PASSWORD))
         from_addr = str(entry_options.get(OPT_SMTP_FROM, DEFAULT_SMTP_FROM)).strip()
-        to_raw = str(entry_options.get(OPT_SMTP_TO, DEFAULT_SMTP_TO))
-        to_addrs = _parse_recipients(to_raw)
+
+        # Get recipients based on level
+        to_addrs = _get_smtp_recipients(level, entry_options)
 
         # Not configured -> no-op
         if not host or not from_addr or not to_addrs:
+            _LOGGER.debug("SMTP not fully configured, skipping email")
             return
 
         msg = EmailMessage()
@@ -107,16 +166,20 @@ async def async_setup_notifications(hass: HomeAssistant) -> None:
         msg["Subject"] = subject
         msg.set_content(body)
 
-        await aiosmtplib.send(
-            msg,
-            hostname=host,
-            port=port,
-            start_tls=starttls,
-            use_tls=use_ssl,
-            username=username or None,
-            password=password or None,
-            timeout=15,
-        )
+        try:
+            await aiosmtplib.send(
+                msg,
+                hostname=host,
+                port=port,
+                start_tls=starttls,
+                use_tls=use_ssl,
+                username=username or None,
+                password=password or None,
+                timeout=15,
+            )
+            _LOGGER.debug("Email sent to %s", ", ".join(to_addrs))
+        except Exception as err:
+            _LOGGER.warning("Failed to send email: %s", err)
 
     async def _publish(
         *,
@@ -129,9 +192,11 @@ async def async_setup_notifications(hass: HomeAssistant) -> None:
         email: bool = False,
         persistent: bool = True,
     ) -> None:
+        """Publish a notification with level filtering."""
         tag = "homie"
         lvl = _normalize_level(level)
 
+        # Create notification item
         item = HomieNotification(
             ts=_now_iso(),
             level=lvl,
@@ -142,6 +207,7 @@ async def async_setup_notifications(hass: HomeAssistant) -> None:
         )
         _append(item)
 
+        # Always create persistent notification if requested
         if persistent:
             await hass.services.async_call(
                 "persistent_notification",
@@ -154,42 +220,49 @@ async def async_setup_notifications(hass: HomeAssistant) -> None:
                 blocking=False,
             )
 
-        # Defaults for non-entry calls
-        notifications_enabled = True
-        push_enabled = True
-        email_enabled = False
-        push_target = DEFAULT_NOTIFY_TARGET_PUSH
+        # Get options with defaults
+        if entry_options is None:
+            entry_options = {}
 
-        if entry_options is not None:
-            notifications_enabled = bool(entry_options.get(OPT_NOTIFICATIONS_ENABLED, DEFAULT_NOTIFICATIONS_ENABLED))
-            push_enabled = bool(entry_options.get(OPT_PUSH_ENABLED, DEFAULT_PUSH_ENABLED))
-            email_enabled = bool(entry_options.get(OPT_EMAIL_ENABLED, DEFAULT_EMAIL_ENABLED))
-            push_target = str(entry_options.get(OPT_NOTIFY_TARGET_PUSH, DEFAULT_NOTIFY_TARGET_PUSH))
+        notifications_enabled = entry_options.get(
+            OPT_NOTIFICATIONS_ENABLED, DEFAULT_NOTIFICATIONS_ENABLED
+        )
+        push_enabled = entry_options.get(OPT_PUSH_ENABLED, DEFAULT_PUSH_ENABLED)
+        email_enabled = entry_options.get(OPT_EMAIL_ENABLED, DEFAULT_EMAIL_ENABLED)
+        notification_level = entry_options.get(
+            OPT_NOTIFICATION_LEVEL, DEFAULT_NOTIFICATION_LEVEL
+        )
+        push_level = entry_options.get(OPT_PUSH_LEVEL, DEFAULT_PUSH_LEVEL)
+        push_target = entry_options.get(
+            OPT_NOTIFY_TARGET_PUSH, DEFAULT_NOTIFY_TARGET_PUSH
+        )
 
         if not notifications_enabled:
             return
 
+        # Push notification with level filtering
         if push and push_enabled:
-            await _call_notify_service(
-                push_target,
-                {
-                    "message": f"[{tag}] {title}\n{message}",
-                    "data": {"tag": tag},
-                },
-            )
+            if _should_send_by_level(lvl, push_level):
+                await _call_notify_service(
+                    push_target,
+                    {
+                        "message": f"[{tag}] {title}\n{message}",
+                        "data": {"tag": tag},
+                    },
+                )
 
-        if email and email_enabled and entry_options is not None:
-            try:
+        # Email notification with level filtering
+        if email and email_enabled:
+            if _should_send_by_level(lvl, notification_level):
                 await _send_smtp_email(
                     entry_options,
+                    lvl,
                     subject=f"[{tag}] {title}",
                     body=f"{message}\n\nsource={source}\nlevel={lvl}\ntag={tag}\n",
                 )
-            except Exception:
-                # no hard fail
-                return
 
     async def handle_service(call) -> None:
+        """Handle homie_main.notify service calls."""
         data = call.data or {}
         await _publish(
             title=str(data.get("title", "Notification")),
@@ -206,6 +279,7 @@ async def async_setup_notifications(hass: HomeAssistant) -> None:
 
     @callback
     def handle_event(event) -> None:
+        """Handle homie_notification events."""
         ed = event.data or {}
         item = HomieNotification(
             ts=_now_iso(),
@@ -218,10 +292,12 @@ async def async_setup_notifications(hass: HomeAssistant) -> None:
         _append(item)
 
     hass.bus.async_listen(EVENT_HOMIE_NOTIFICATION, handle_event)
+    _LOGGER.info("Homie notification system initialized")
 
 
 def get_feed(hass: HomeAssistant) -> list[Dict[str, Any]]:
-    store = hass.data.get(STORE_KEY, {})
+    """Get notification feed (last N notifications)."""
+    store = hass.data.get(NOTIFICATION_STORE_KEY, {})
     items: Deque[HomieNotification] = store.get("items", deque())
     return [
         {

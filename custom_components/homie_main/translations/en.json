@@ -18,7 +18,26 @@
           "wifi_entities": "WiFi presence entities",
           "motion_entities": "Motion sensors"
         }
+      },
+      "email_smtp": {
+        "title": "Email notification setup (optional)",
+        "description": "Configure SMTP for email notifications. Leave empty to skip.",
+        "data": {
+          "smtp_host": "SMTP server",
+          "smtp_port": "SMTP port",
+          "smtp_ssl": "Use SSL",
+          "smtp_starttls": "Use STARTTLS",
+          "smtp_username": "Username",
+          "smtp_password": "Password",
+          "smtp_from": "From address",
+          "smtp_to_warnings": "Recipients for warnings",
+          "smtp_to_alerts": "Recipients for alerts"
+        }
       }
+    },
+    "error": {
+      "empty_site_name": "Site name cannot be empty",
+      "calendar_not_found": "Calendar entity not found"
     }
   },
   "options": {
@@ -32,7 +51,23 @@
           "email_enabled": "Enable email notifications",
           "notification_level": "Notification level",
           "push_level": "Push notification level",
-          "notify_target": "Notify service target"
+          "notify_target": "Notify service target",
+          "smtp_host": "SMTP server",
+          "smtp_port": "SMTP port",
+          "smtp_ssl": "Use SSL",
+          "smtp_starttls": "Use STARTTLS",
+          "smtp_username": "Username",
+          "smtp_password": "Password",
+          "smtp_from": "From address",
+          "smtp_to_warnings": "Recipients for warnings",
+          "smtp_to_alerts": "Recipients for alerts",
+          "kpi_power_use": "Power use sensor",
+          "kpi_day_energy_use": "Day energy use sensor",
+          "kpi_solar_power": "Solar power sensor",
+          "kpi_solar_day_energy": "Solar day energy sensor",
+          "kpi_forecast_use": "Forecast use sensor",
+          "kpi_solar_forecast": "Solar forecast sensor",
+          "kpi_purchase_price": "Purchase price sensor"
         }
       }
     }

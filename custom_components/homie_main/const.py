@@ -1,297 +1,140 @@
-# custom_components/homie_main/config_flow.py
+# custom_components/homie_main/const.py
+"""Constants for the Homie Main integration."""
 
 from __future__ import annotations
 
-import voluptuous as vol
+# Integration metadata
+DOMAIN = "homie_main"
+VERSION = "0.3.0"
 
-from homeassistant import config_entries
-from homeassistant.helpers import selector
+# Configuration keys (locked after installation, stored in entry.data)
+CONF_SITE_NAME = "site_name"
+CONF_PRESENCE_MODE = "presence_mode"
+CONF_GPS_ENTITIES = "gps_entities"
+CONF_WIFI_ENTITIES = "wifi_entities"
+CONF_MOTION_ENTITIES = "motion_entities"
+CONF_CALENDAR_ENTITY = "calendar_entity"
 
-from .const import (
-    DOMAIN,
-    # locked data
-    CONF_SITE_NAME,
-    CONF_PRESENCE_MODE,
-    PRESENCE_MODES,
-    CONF_GPS_ENTITIES,
-    CONF_WIFI_ENTITIES,
-    CONF_MOTION_ENTITIES,
-    CONF_CALENDAR_ENTITY,
-    DEFAULT_CALENDAR,
-    # options defaults
-    DEFAULT_KPIS,
-    OPT_NOTIFICATIONS_ENABLED,
-    OPT_PUSH_ENABLED,
-    OPT_EMAIL_ENABLED,
-    OPT_NOTIFICATION_LEVEL,
-    OPT_PUSH_LEVEL,
-    OPT_NOTIFY_TARGET_PUSH,
-    DEFAULT_NOTIFICATIONS_ENABLED,
-    DEFAULT_PUSH_ENABLED,
-    DEFAULT_EMAIL_ENABLED,
-    DEFAULT_NOTIFICATION_LEVEL,
-    DEFAULT_PUSH_LEVEL,
-    DEFAULT_NOTIFY_TARGET_PUSH,
-    NOTIFICATION_LEVELS,
-    PUSH_LEVELS,
-    # smtp
-    OPT_SMTP_HOST,
-    OPT_SMTP_PORT,
-    OPT_SMTP_STARTTLS,
-    OPT_SMTP_SSL,
-    OPT_SMTP_USERNAME,
-    OPT_SMTP_PASSWORD,
-    OPT_SMTP_FROM,
-    OPT_SMTP_TO_WARNINGS,
-    OPT_SMTP_TO_ALERTS,
-    DEFAULT_SMTP_HOST,
-    DEFAULT_SMTP_PORT,
-    DEFAULT_SMTP_STARTTLS,
-    DEFAULT_SMTP_SSL,
-    DEFAULT_SMTP_USERNAME,
-    DEFAULT_SMTP_PASSWORD,
-    DEFAULT_SMTP_FROM,
-    DEFAULT_SMTP_TO_WARNINGS,
-    DEFAULT_SMTP_TO_ALERTS,
-    # KPI keys
-    CONF_KPI_POWER_USE,
-    CONF_KPI_DAY_ENERGY_USE,
-    CONF_KPI_SOLAR_POWER,
-    CONF_KPI_SOLAR_DAY_ENERGY,
-    CONF_KPI_FORECAST_USE,
-    CONF_KPI_SOLAR_FORECAST,
-    CONF_KPI_PURCHASE_PRICE,
-)
+# Presence modes
+PRESENCE_MODES = ["GPS", "WiFi", "Motion", "Calendar"]
 
+# Default values for configuration
+DEFAULT_CALENDAR = "calendar.homie"
+DEFAULT_SITE_NAME = "Home"
 
-class HomieMainConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
-    VERSION = 1
+# Options keys (user-configurable, stored in entry.options)
+# Notification settings
+OPT_NOTIFICATIONS_ENABLED = "notifications_enabled"
+OPT_PUSH_ENABLED = "push_enabled"
+OPT_EMAIL_ENABLED = "email_enabled"
+OPT_NOTIFICATION_LEVEL = "notification_level"
+OPT_PUSH_LEVEL = "push_level"
+OPT_NOTIFY_TARGET_PUSH = "notify_target"
 
-    def __init__(self) -> None:
-        self._site_name: str = "Home"
-        self._presence_mode: str = "GPS"
-        self._presence_data: dict = {}
+# SMTP configuration
+OPT_SMTP_HOST = "smtp_host"
+OPT_SMTP_PORT = "smtp_port"
+OPT_SMTP_SSL = "smtp_ssl"
+OPT_SMTP_STARTTLS = "smtp_starttls"
+OPT_SMTP_USERNAME = "smtp_username"
+OPT_SMTP_PASSWORD = "smtp_password"
+OPT_SMTP_FROM = "smtp_from"
+OPT_SMTP_TO_WARNINGS = "smtp_to_warnings"
+OPT_SMTP_TO_ALERTS = "smtp_to_alerts"
 
-    async def async_step_user(self, user_input=None):
-        if user_input is not None:
-            self._site_name = user_input[CONF_SITE_NAME]
-            self._presence_mode = user_input[CONF_PRESENCE_MODE]
-            return await self.async_step_presence_inputs()
+# KPI configuration keys
+CONF_KPI_POWER_USE = "kpi_power_use"
+CONF_KPI_DAY_ENERGY_USE = "kpi_day_energy_use"
+CONF_KPI_SOLAR_POWER = "kpi_solar_power"
+CONF_KPI_SOLAR_DAY_ENERGY = "kpi_solar_day_energy"
+CONF_KPI_FORECAST_USE = "kpi_forecast_use"
+CONF_KPI_SOLAR_FORECAST = "kpi_solar_forecast"
+CONF_KPI_PURCHASE_PRICE = "kpi_purchase_price"
 
-        schema = vol.Schema(
-            {
-                vol.Required(CONF_SITE_NAME, default="Home"): str,
-                vol.Required(CONF_PRESENCE_MODE, default="GPS"): vol.In(PRESENCE_MODES),
-            }
-        )
-        return self.async_show_form(step_id="user", data_schema=schema)
+# Default notification settings
+DEFAULT_NOTIFICATIONS_ENABLED = True
+DEFAULT_PUSH_ENABLED = True
+DEFAULT_EMAIL_ENABLED = False
+DEFAULT_NOTIFICATION_LEVEL = "Warning"
+DEFAULT_PUSH_LEVEL = "Alert"
+DEFAULT_NOTIFY_TARGET_PUSH = "notify.notify"
 
-    async def async_step_presence_inputs(self, user_input=None):
-        mode = self._presence_mode or "GPS"
+# Default SMTP settings
+DEFAULT_SMTP_HOST = ""
+DEFAULT_SMTP_PORT = 587
+DEFAULT_SMTP_SSL = False
+DEFAULT_SMTP_STARTTLS = True
+DEFAULT_SMTP_USERNAME = ""
+DEFAULT_SMTP_PASSWORD = ""
+DEFAULT_SMTP_FROM = ""
+DEFAULT_SMTP_TO_WARNINGS = ""
+DEFAULT_SMTP_TO_ALERTS = ""
 
-        if user_input is not None:
-            self._presence_data = {
-                CONF_SITE_NAME: self._site_name,
-                CONF_PRESENCE_MODE: mode,  # locked after install
-                CONF_CALENDAR_ENTITY: user_input.get(CONF_CALENDAR_ENTITY, DEFAULT_CALENDAR),
-                CONF_GPS_ENTITIES: user_input.get(CONF_GPS_ENTITIES, []),
-                CONF_WIFI_ENTITIES: user_input.get(CONF_WIFI_ENTITIES, []),
-                CONF_MOTION_ENTITIES: user_input.get(CONF_MOTION_ENTITIES, []),
-            }
-            return await self.async_step_email_smtp()
+# Notification and push levels
+NOTIFICATION_LEVELS = ["All", "Info", "Tip", "Warning", "Alert"]
+PUSH_LEVELS = ["All", "Info", "Tip", "Warning", "Alert"]
 
-        fields: dict = {
-            vol.Optional(
-                CONF_CALENDAR_ENTITY, default=DEFAULT_CALENDAR
-            ): selector.EntitySelector(selector.EntitySelectorConfig(domain="calendar")),
-        }
+# Level hierarchy for filtering (lower number = less important)
+LEVEL_HIERARCHY = {
+    "info": 0,
+    "tip": 1,
+    "warning": 2,
+    "alert": 3,
+}
 
-        if mode == "GPS":
-            fields[vol.Optional(CONF_GPS_ENTITIES, default=[])] = selector.EntitySelector(
-                selector.EntitySelectorConfig(domain=["person", "device_tracker"], multiple=True)
-            )
-        elif mode == "WiFi":
-            fields[vol.Optional(CONF_WIFI_ENTITIES, default=[])] = selector.EntitySelector(
-                selector.EntitySelectorConfig(domain="device_tracker", multiple=True)
-            )
-        elif mode == "Motion":
-            fields[vol.Optional(CONF_MOTION_ENTITIES, default=[])] = selector.EntitySelector(
-                selector.EntitySelectorConfig(domain="binary_sensor", multiple=True)
-            )
-        elif mode == "Calendar":
-            pass
+# Home status options
+HOME_STATUS_OPTIONS = ["Auto", "Home", "Away", "Holiday", "Guests"]
+DEFAULT_HOME_STATUS = "Auto"
 
-        return self.async_show_form(step_id="presence_inputs", data_schema=vol.Schema(fields))
+# Default KPI mappings (placeholder entity IDs)
+DEFAULT_KPIS = {
+    CONF_KPI_POWER_USE: "sensor.ec_use_power",
+    CONF_KPI_DAY_ENERGY_USE: "sensor.ec_use_day_energy",
+    CONF_KPI_SOLAR_POWER: "sensor.ec_solar_power",
+    CONF_KPI_SOLAR_DAY_ENERGY: "sensor.ec_solar_day_energy",
+    CONF_KPI_FORECAST_USE: "sensor.ec_use_day_forecast",
+    CONF_KPI_SOLAR_FORECAST: "sensor.ec_solar_day_forecast",
+    CONF_KPI_PURCHASE_PRICE: "sensor.ec_purchase_price",
+}
 
-    async def async_step_email_smtp(self, user_input=None):
-        """Installer step: configure SMTP + recipients during installation."""
-        if user_input is not None:
-            # Build options: KPI defaults + notification defaults + SMTP config
-            options = dict(DEFAULT_KPIS)
+# Coordinator settings
+UPDATE_INTERVAL_SECONDS = 30
+DATA_GAP_THRESHOLD_HOURS = 1
+WARNING_COOLDOWN_HOURS = 6
 
-            # notification defaults (user can change later)
-            options.setdefault(OPT_NOTIFICATIONS_ENABLED, DEFAULT_NOTIFICATIONS_ENABLED)
-            options.setdefault(OPT_PUSH_ENABLED, DEFAULT_PUSH_ENABLED)
-            options.setdefault(OPT_EMAIL_ENABLED, DEFAULT_EMAIL_ENABLED)
-            options.setdefault(OPT_NOTIFICATION_LEVEL, DEFAULT_NOTIFICATION_LEVEL)
-            options.setdefault(OPT_PUSH_LEVEL, DEFAULT_PUSH_LEVEL)
-            options.setdefault(OPT_NOTIFY_TARGET_PUSH, DEFAULT_NOTIFY_TARGET_PUSH)
+# Storage keys
+STORE_VERSION = 1
+STORE_MANUAL_OVERRIDE_KEY = f"{DOMAIN}.manual_override"
 
-            # SMTP config from installer wizard
-            options[OPT_SMTP_HOST] = user_input.get(OPT_SMTP_HOST, DEFAULT_SMTP_HOST)
-            options[OPT_SMTP_PORT] = int(user_input.get(OPT_SMTP_PORT, DEFAULT_SMTP_PORT))
-            options[OPT_SMTP_SSL] = bool(user_input.get(OPT_SMTP_SSL, DEFAULT_SMTP_SSL))
-            options[OPT_SMTP_STARTTLS] = bool(user_input.get(OPT_SMTP_STARTTLS, DEFAULT_SMTP_STARTTLS))
-            options[OPT_SMTP_USERNAME] = user_input.get(OPT_SMTP_USERNAME, DEFAULT_SMTP_USERNAME)
-            options[OPT_SMTP_PASSWORD] = user_input.get(OPT_SMTP_PASSWORD, DEFAULT_SMTP_PASSWORD)
-            options[OPT_SMTP_FROM] = user_input.get(OPT_SMTP_FROM, DEFAULT_SMTP_FROM)
+# Entity IDs
+ENTITY_ID_PREFIX = "homie_main"
 
-            # recipients
-            options[OPT_SMTP_TO_WARNINGS] = user_input.get(OPT_SMTP_TO_WARNINGS, DEFAULT_SMTP_TO_WARNINGS)
-            options[OPT_SMTP_TO_ALERTS] = user_input.get(OPT_SMTP_TO_ALERTS, DEFAULT_SMTP_TO_ALERTS)
+# Icons
+ICON_HOME = "mdi:home"
+ICON_AWAY = "mdi:home-export-outline"
+ICON_HOLIDAY = "mdi:beach"
+ICON_GUESTS = "mdi:account-multiple"
+ICON_PRESENCE = "mdi:home-account"
+ICON_GPS = "mdi:map-marker"
+ICON_WIFI = "mdi:wifi"
+ICON_MOTION = "mdi:motion-sensor"
+ICON_CALENDAR = "mdi:calendar"
+ICON_MANUAL = "mdi:hand-back-right"
+ICON_NOTIFICATION = "mdi:bell"
+ICON_EMAIL = "mdi:email"
+ICON_PUSH = "mdi:cellphone-message"
+ICON_DATA_GAP = "mdi:alert-circle"
+ICON_CLEAR = "mdi:close-circle"
 
-            return self.async_create_entry(
-                title=f"Homie Main ({self._site_name})",
-                data=self._presence_data,
-                options=options,
-            )
+# Notification event and service
+EVENT_HOMIE_NOTIFICATION = "homie_notification"
+SERVICE_NOTIFY = "notify"
 
-        schema = vol.Schema(
-            {
-                vol.Optional(OPT_SMTP_HOST, default=DEFAULT_SMTP_HOST): str,
-                vol.Optional(OPT_SMTP_PORT, default=DEFAULT_SMTP_PORT): vol.Coerce(int),
-                vol.Optional(OPT_SMTP_SSL, default=DEFAULT_SMTP_SSL): bool,
-                vol.Optional(OPT_SMTP_STARTTLS, default=DEFAULT_SMTP_STARTTLS): bool,
-                vol.Optional(OPT_SMTP_USERNAME, default=DEFAULT_SMTP_USERNAME): str,
-                vol.Optional(
-                    OPT_SMTP_PASSWORD,
-                    default=DEFAULT_SMTP_PASSWORD,
-                ): selector.TextSelector(selector.TextSelectorConfig(type=selector.TextSelectorType.PASSWORD)),
-                vol.Optional(OPT_SMTP_FROM, default=DEFAULT_SMTP_FROM): str,
-                vol.Optional(
-                    OPT_SMTP_TO_WARNINGS,
-                    default=DEFAULT_SMTP_TO_WARNINGS,
-                ): str,
-                vol.Optional(
-                    OPT_SMTP_TO_ALERTS,
-                    default=DEFAULT_SMTP_TO_ALERTS,
-                ): str,
-            }
-        )
+# Notification store
+NOTIFICATION_STORE_KEY = "homie_notification_store"
+NOTIFICATION_HISTORY_SIZE = 100
 
-        return self.async_show_form(step_id="email_smtp", data_schema=schema)
-
-    @staticmethod
-    def async_get_options_flow(config_entry):
-        return HomieMainOptionsFlowHandler(config_entry)
-
-
-class HomieMainOptionsFlowHandler(config_entries.OptionsFlow):
-    def __init__(self, entry: config_entries.ConfigEntry) -> None:
-        self.entry = entry
-
-    async def async_step_init(self, user_input=None):
-        if user_input is not None:
-            return self.async_create_entry(title="", data=user_input)
-
-        schema = vol.Schema(
-            {
-                # user settings
-                vol.Optional(
-                    OPT_NOTIFICATIONS_ENABLED,
-                    default=self.entry.options.get(OPT_NOTIFICATIONS_ENABLED, DEFAULT_NOTIFICATIONS_ENABLED),
-                ): bool,
-                vol.Optional(
-                    OPT_PUSH_ENABLED,
-                    default=self.entry.options.get(OPT_PUSH_ENABLED, DEFAULT_PUSH_ENABLED),
-                ): bool,
-                vol.Optional(
-                    OPT_EMAIL_ENABLED,
-                    default=self.entry.options.get(OPT_EMAIL_ENABLED, DEFAULT_EMAIL_ENABLED),
-                ): bool,
-                vol.Optional(
-                    OPT_NOTIFICATION_LEVEL,
-                    default=self.entry.options.get(OPT_NOTIFICATION_LEVEL, DEFAULT_NOTIFICATION_LEVEL),
-                ): vol.In(NOTIFICATION_LEVELS),
-                vol.Optional(
-                    OPT_PUSH_LEVEL,
-                    default=self.entry.options.get(OPT_PUSH_LEVEL, DEFAULT_PUSH_LEVEL),
-                ): vol.In(PUSH_LEVELS),
-
-                # push target
-                vol.Optional(
-                    OPT_NOTIFY_TARGET_PUSH,
-                    default=self.entry.options.get(OPT_NOTIFY_TARGET_PUSH, DEFAULT_NOTIFY_TARGET_PUSH),
-                ): str,
-
-                # SMTP editable later
-                vol.Optional(
-                    OPT_SMTP_HOST,
-                    default=self.entry.options.get(OPT_SMTP_HOST, DEFAULT_SMTP_HOST),
-                ): str,
-                vol.Optional(
-                    OPT_SMTP_PORT,
-                    default=int(self.entry.options.get(OPT_SMTP_PORT, DEFAULT_SMTP_PORT)),
-                ): vol.Coerce(int),
-                vol.Optional(
-                    OPT_SMTP_SSL,
-                    default=bool(self.entry.options.get(OPT_SMTP_SSL, DEFAULT_SMTP_SSL)),
-                ): bool,
-                vol.Optional(
-                    OPT_SMTP_STARTTLS,
-                    default=bool(self.entry.options.get(OPT_SMTP_STARTTLS, DEFAULT_SMTP_STARTTLS)),
-                ): bool,
-                vol.Optional(
-                    OPT_SMTP_USERNAME,
-                    default=self.entry.options.get(OPT_SMTP_USERNAME, DEFAULT_SMTP_USERNAME),
-                ): str,
-                vol.Optional(
-                    OPT_SMTP_PASSWORD,
-                    default=self.entry.options.get(OPT_SMTP_PASSWORD, DEFAULT_SMTP_PASSWORD),
-                ): selector.TextSelector(selector.TextSelectorConfig(type=selector.TextSelectorType.PASSWORD)),
-                vol.Optional(
-                    OPT_SMTP_FROM,
-                    default=self.entry.options.get(OPT_SMTP_FROM, DEFAULT_SMTP_FROM),
-                ): str,
-                vol.Optional(
-                    OPT_SMTP_TO_WARNINGS,
-                    default=self.entry.options.get(OPT_SMTP_TO_WARNINGS, DEFAULT_SMTP_TO_WARNINGS),
-                ): str,
-                vol.Optional(
-                    OPT_SMTP_TO_ALERTS,
-                    default=self.entry.options.get(OPT_SMTP_TO_ALERTS, DEFAULT_SMTP_TO_ALERTS),
-                ): str,
-
-                # KPI mapping
-                vol.Required(
-                    CONF_KPI_POWER_USE,
-                    default=self.entry.options.get(CONF_KPI_POWER_USE, DEFAULT_KPIS[CONF_KPI_POWER_USE]),
-                ): selector.EntitySelector(selector.EntitySelectorConfig()),
-                vol.Required(
-                    CONF_KPI_DAY_ENERGY_USE,
-                    default=self.entry.options.get(CONF_KPI_DAY_ENERGY_USE, DEFAULT_KPIS[CONF_KPI_DAY_ENERGY_USE]),
-                ): selector.EntitySelector(selector.EntitySelectorConfig()),
-                vol.Required(
-                    CONF_KPI_SOLAR_POWER,
-                    default=self.entry.options.get(CONF_KPI_SOLAR_POWER, DEFAULT_KPIS[CONF_KPI_SOLAR_POWER]),
-                ): selector.EntitySelector(selector.EntitySelectorConfig()),
-                vol.Required(
-                    CONF_KPI_SOLAR_DAY_ENERGY,
-                    default=self.entry.options.get(CONF_KPI_SOLAR_DAY_ENERGY, DEFAULT_KPIS[CONF_KPI_SOLAR_DAY_ENERGY]),
-                ): selector.EntitySelector(selector.EntitySelectorConfig()),
-                vol.Required(
-                    CONF_KPI_FORECAST_USE,
-                    default=self.entry.options.get(CONF_KPI_FORECAST_USE, DEFAULT_KPIS[CONF_KPI_FORECAST_USE]),
-                ): selector.EntitySelector(selector.EntitySelectorConfig()),
-                vol.Required(
-                    CONF_KPI_SOLAR_FORECAST,
-                    default=self.entry.options.get(CONF_KPI_SOLAR_FORECAST, DEFAULT_KPIS[CONF_KPI_SOLAR_FORECAST]),
-                ): selector.EntitySelector(selector.EntitySelectorConfig()),
-                vol.Required(
-                    CONF_KPI_PURCHASE_PRICE,
-                    default=self.entry.options.get(CONF_KPI_PURCHASE_PRICE, DEFAULT_KPIS[CONF_KPI_PURCHASE_PRICE]),
-                ): selector.EntitySelector(selector.EntitySelectorConfig()),
-            }
-        )
-
-        return self.async_show_form(step_id="init", data_schema=schema)
+# Warning keys (for cooldown tracking)
+WARN_PRESENCE_GAP = "presence_data_gap"
+WARN_CALENDAR_GAP = "calendar_data_gap"
+WARN_MAIN_GAP = "main_kpi_data_gap"
