@@ -2,37 +2,248 @@
   "config": {
     "step": {
       "user": {
-        "title": "Homie Main installatie",
-        "description": "Configureer het basisgedrag voor deze locatie.",
+        "title": "Algemene instellingen",
+        "description": "Configureer de basisinstellingen voor Homie Main.",
         "data": {
-          "site_name": "Naam van locatie",
-          "presence_mode": "Type aanwezigheid detectie"
+          "site_name": "Locatienaam",
+          "admin_emails": "Beheerder e-mail(s)",
+          "location_type": "Type locatie",
+          "push_enabled": "Push notificaties",
+          "push_general": "Algemeen",
+          "push_alerts": "Alerts",
+          "push_warnings": "Waarschuwingen",
+          "mail_enabled": "E-mail notificaties",
+          "mail_warnings": "Waarschuwingen",
+          "mail_alerts": "Alerts",
+          "presence_detection": "Aanwezigheid & planning"
+        },
+        "data_description": {
+          "site_name": "Naam van je woning/locatie (gebruikt in notificaties)",
+          "admin_emails": "Komma-gescheiden lijst van beheerder e-mailadressen",
+          "location_type": "Selecteer of dit een woning of bedrijf is",
+          "push_enabled": "Schakel push notificaties in of uit",
+          "mail_enabled": "Schakel e-mail notificaties in of uit",
+          "presence_detection": "Aanwezigheidsdetectie en werkrooster inschakelen"
         }
       },
-      "presence_inputs": {
-        "title": "Aanwezigheid configuratie",
-        "description": "Selecteer de entiteiten die gebruikt worden voor aanwezigheid.",
+      "presence": {
+        "title": "Aanwezigheidsdetectie",
+        "description": "Selecteer welke aanwezigheidsdetectiemethodes je wilt gebruiken.",
         "data": {
-          "calendar_entity": "Agenda-entiteit",
-          "gps_entities": "GPS-aanwezigheidsentiteiten",
-          "wifi_entities": "WiFi-aanwezigheidsentiteiten",
-          "motion_entities": "Bewegingssensoren"
+          "use_gps": "GPS locatie",
+          "use_wifi": "WiFi verbinding",
+          "use_motion": "Bewegingssensoren",
+          "use_calendar": "Agenda evenementen",
+          "use_schedule": "Werkrooster"
+        },
+        "data_description": {
+          "use_gps": "Gebruik GPS/apparaattracker voor aanwezigheidsdetectie",
+          "use_wifi": "Gebruik WiFi verbindingsstatus voor aanwezigheidsdetectie",
+          "use_motion": "Gebruik bewegingssensoren voor aanwezigheidsdetectie",
+          "use_calendar": "Gebruik agenda evenementen voor vakantie/gasten status",
+          "use_schedule": "Automatische Werk/Afwezig status op basis van werktijden"
+        }
+      },
+      "presence_followup": {
+        "title": "Aanwezigheidsconfiguratie",
+        "description": "Configureer de entiteiten voor aanwezigheidsdetectie.",
+        "data": {
+          "gps_entities": "GPS aanwezigheidsentiteiten",
+          "gps_distance": "GPS afstand van huis",
+          "ping_entities": "WiFi aanwezigheidsentiteiten",
+          "motion_entities": "Bewegingssensoren",
+          "motion_away_hours": "Beweging timeout (uren)",
+          "calendar_entities": "Agenda entiteiten",
+          "schedule_monday": "Maandag",
+          "schedule_monday_times": "Tijden",
+          "schedule_tuesday": "Dinsdag",
+          "schedule_tuesday_times": "Tijden",
+          "schedule_wednesday": "Woensdag",
+          "schedule_wednesday_times": "Tijden",
+          "schedule_thursday": "Donderdag",
+          "schedule_thursday_times": "Tijden",
+          "schedule_friday": "Vrijdag",
+          "schedule_friday_times": "Tijden",
+          "schedule_saturday": "Zaterdag",
+          "schedule_saturday_times": "Tijden",
+          "schedule_sunday": "Zondag",
+          "schedule_sunday_times": "Tijden"
+        },
+        "data_description": {
+          "gps_entities": "Vereist: Mobile App integratie of andere device_tracker met GPS.",
+          "gps_distance": "Afstand in meters om als 'thuis' te beschouwen.",
+          "ping_entities": "Vereist: Ping integratie. Installeer via Instellingen > Apparaten & Services > Toevoegen > Ping.",
+          "motion_entities": "Vereist: Bewegingssensoren van bijv. Zigbee, Z-Wave of ESPHome integratie.",
+          "motion_away_hours": "Uren zonder beweging voordat status 'afwezig' wordt.",
+          "calendar_entities": "Vereist: Agenda integratie (Google Calendar, CalDAV of Local Calendar). Let op: status update alleen bij start/einde van events."
+        }
+      },
+      "kpi_mapping": {
+        "title": "KPI sensor mapping",
+        "description": "Koppel je energiesensoren aan het KPI dashboard. Deze worden vooraf ingevuld als energy_core is geïnstalleerd.",
+        "data": {
+          "kpi_power_use": "Stroomverbruik sensor",
+          "kpi_day_energy_use": "Dag energieverbruik sensor",
+          "kpi_solar_power": "Zonnestroom sensor",
+          "kpi_solar_day_energy": "Dag zonne-energie sensor",
+          "kpi_forecast_use": "Voorspeld verbruik sensor",
+          "kpi_solar_forecast": "Voorspelde zonne-energie sensor",
+          "kpi_purchase_price": "Inkoopprijs sensor"
+        },
+        "data_description": {
+          "kpi_power_use": "Huidig stroomverbruik (W)",
+          "kpi_day_energy_use": "Energieverbruik vandaag (kWh)",
+          "kpi_solar_power": "Huidige zonnestroomproductie (W)",
+          "kpi_solar_day_energy": "Zonne-energieproductie vandaag (kWh)",
+          "kpi_forecast_use": "Voorspeld energieverbruik (kWh)",
+          "kpi_solar_forecast": "Voorspelde zonnestroomproductie (kWh)",
+          "kpi_purchase_price": "Huidige inkoopprijs (EUR/kWh)"
         }
       }
+    },
+    "error": {
+      "empty_site_name": "Locatienaam mag niet leeg zijn",
+      "invalid_email": "Ongeldig e-mailadres formaat"
     }
   },
   "options": {
     "step": {
       "init": {
-        "title": "Homie Main instellingen",
-        "description": "Pas gebruikersinstellingen en KPI-koppelingen aan.",
+        "title": "Homie Main opties",
+        "description": "Configureer notificaties, aanwezigheidsdetectie en e-mail ontvangers.",
         "data": {
-          "notifications_enabled": "Notificaties inschakelen",
-          "push_enabled": "Pushmeldingen inschakelen",
-          "email_enabled": "E-mailmeldingen inschakelen",
-          "notification_level": "Notificatieniveau",
-          "push_level": "Push-notificatieniveau",
-          "notify_target": "Notificatie service"
+          "push_enabled": "Push notificaties",
+          "push_general": "Algemeen",
+          "push_warnings": "Waarschuwingen",
+          "push_alerts": "Alerts",
+          "mail_enabled": "E-mail notificaties",
+          "mail_warnings": "Waarschuwingen",
+          "mail_alerts": "Alerts",
+          "use_gps": "GPS detectie",
+          "use_wifi": "WiFi detectie",
+          "use_motion": "Bewegingsdetectie",
+          "use_calendar": "Agenda detectie",
+          "smtp_to": "Ontvanger e-mail(s)",
+          "schedule_monday": "Maandag",
+          "schedule_monday_times": "Tijden",
+          "schedule_tuesday": "Dinsdag",
+          "schedule_tuesday_times": "Tijden",
+          "schedule_wednesday": "Woensdag",
+          "schedule_wednesday_times": "Tijden",
+          "schedule_thursday": "Donderdag",
+          "schedule_thursday_times": "Tijden",
+          "schedule_friday": "Vrijdag",
+          "schedule_friday_times": "Tijden",
+          "schedule_saturday": "Zaterdag",
+          "schedule_saturday_times": "Tijden",
+          "schedule_sunday": "Zondag",
+          "schedule_sunday_times": "Tijden",
+          "kpi_power_use": "Stroomverbruik sensor",
+          "kpi_day_energy_use": "Dag energieverbruik sensor",
+          "kpi_solar_power": "Zonnestroom sensor",
+          "kpi_solar_day_energy": "Dag zonne-energie sensor",
+          "kpi_forecast_use": "Voorspeld verbruik sensor",
+          "kpi_solar_forecast": "Voorspelde zonne-energie sensor",
+          "kpi_purchase_price": "Inkoopprijs sensor"
+        },
+        "data_description": {
+          "smtp_to": "Komma-gescheiden lijst van ontvanger e-mailadressen"
+        }
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "hm_presence_source": {
+        "name": "Aanwezigheidsbron"
+      },
+      "hm_manual_override_active": {
+        "name": "Handmatige Override Actief"
+      },
+      "hm_manual_override_until": {
+        "name": "Handmatige Override Tot"
+      },
+      "hm_operating_mode": {
+        "name": "Bedrijfsmodus",
+        "state": {
+          "Active": "Actief",
+          "Stand-by": "Stand-by",
+          "Hibernation": "Slaapstand"
+        }
+      },
+      "hm_price_day_curve": {
+        "name": "Prijsverloop Dagcurve"
+      },
+      "hm_use_display": {
+        "name": "Verbruik Weergave"
+      },
+      "hm_solar_display": {
+        "name": "Zonne-energie Weergave"
+      }
+    },
+    "select": {
+      "hm_home_status": {
+        "name": "Thuisstatus",
+        "state": {
+          "Home": "Thuis",
+          "Away": "Afwezig",
+          "Holiday": "Vakantie",
+          "Guests": "Gasten",
+          "Work": "Werk"
+        }
+      },
+      "hm_operating_mode": {
+        "name": "Bedrijfsmodus",
+        "state": {
+          "Active": "Actief",
+          "Stand-by": "Stand-by",
+          "Hibernation": "Slaapstand"
+        }
+      },
+      "hm_visualization": {
+        "name": "Visualisatie",
+        "state": {
+          "W": "W",
+          "kWh/day": "kWh/dag",
+          "€/day": "€/dag"
+        }
+      }
+    },
+    "button": {
+      "hm_clear_override": {
+        "name": "Override Wissen"
+      }
+    },
+    "binary_sensor": {
+      "hm_nighttime": {
+        "name": "Nacht"
+      }
+    }
+  },
+  "services": {
+    "send_notification": {
+      "name": "Verstuur Notificatie",
+      "description": "Verstuur een notificatie via push en/of e-mail",
+      "fields": {
+        "title": {
+          "name": "Titel",
+          "description": "Notificatie titel"
+        },
+        "message": {
+          "name": "Bericht",
+          "description": "Notificatie berichttekst"
+        },
+        "level": {
+          "name": "Niveau",
+          "description": "Notificatie niveau (Info, Tip, Warning, Alert, Award)"
+        },
+        "push": {
+          "name": "Push notificatie",
+          "description": "Overschrijf push notificatie instelling"
+        },
+        "email": {
+          "name": "E-mail notificatie",
+          "description": "Overschrijf e-mail notificatie instelling"
         }
       }
     }

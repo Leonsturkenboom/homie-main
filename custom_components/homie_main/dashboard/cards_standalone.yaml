@@ -1,0 +1,246 @@
+# Homie Main - Standalone Cards
+# Copy individual cards to your existing dashboard
+# Requires: mini-graph-card, auto-entities (HACS)
+#
+# PRD Colors:
+# - Use: rgba(127, 17, 224, 1) - purple
+# - Solar: rgba(233, 188, 5, 1) - yellow
+# - Price: rgba(224, 75, 30, 1) - orange
+
+# ============================================
+# CARD 0: Title with home icon
+# ============================================
+- type: markdown
+  content: "# 🏠 Main"
+  card_mod:
+    style: |
+      ha-card {
+        background: transparent;
+        box-shadow: none;
+        padding: 0;
+      }
+
+# ============================================
+# CARD 1: Schedule Status + Visualization Selector
+# ============================================
+- type: grid
+  columns: 2
+  square: false
+  cards:
+    - type: entity
+      entity: select.hm_home_status
+      name: Schedule
+      state_color: true
+    - type: entity
+      entity: select.hm_visualization
+      name: Eenheid
+      state_color: true
+
+# ============================================
+# CARD 2: Use Graph (Purple) - for horizontal-stack
+# ============================================
+- type: custom:mini-graph-card
+  name: Use
+  icon: mdi:flash
+  entities:
+    - entity: sensor.hm_use_display
+      name: Use
+      color: "rgba(127, 17, 224, 1)"
+      show_fill: false
+      show_state: false
+    - entity: binary_sensor.hm_nighttime
+      name: Nighttime
+      color: transparent
+      show_line: false
+      show_points: false
+      show_state: false
+      y_axis: secondary
+  line_width: 8
+  font_size: 80
+  hours_to_show: 24
+  points_per_hour: 2
+  decimals: 1
+  show:
+    legend: false
+    labels: false
+    labels_secondary: false
+    extrema: true
+    state: false
+    tooltip: false
+
+# ============================================
+# CARD 3: Solar Graph (Yellow) - for horizontal-stack
+# ============================================
+- type: custom:mini-graph-card
+  name: Solar
+  icon: mdi:weather-sunny
+  entities:
+    - entity: sensor.hm_solar_display
+      name: Solar
+      color: "rgba(233, 188, 5, 1)"
+      show_fill: false
+      show_state: false
+    - entity: binary_sensor.hm_nighttime
+      name: Nighttime
+      color: transparent
+      show_line: false
+      show_points: false
+      show_state: false
+      y_axis: secondary
+  line_width: 8
+  font_size: 80
+  hours_to_show: 24
+  points_per_hour: 2
+  decimals: 1
+  show:
+    legend: false
+    labels: false
+    labels_secondary: false
+    extrema: true
+    state: false
+    tooltip: false
+
+# ============================================
+# CARD 4: Price Graph (Orange) - for horizontal-stack
+# ============================================
+- type: custom:mini-graph-card
+  name: Purchase P...
+  icon: mdi:currency-eur
+  entities:
+    - entity: sensor.hm_price_day_curve
+      name: Price
+      color: "rgba(224, 75, 30, 1)"
+      show_fill: false
+      show_state: false
+    - entity: binary_sensor.hm_nighttime
+      name: Nighttime
+      color: transparent
+      show_line: false
+      show_points: false
+      show_state: false
+      y_axis: secondary
+  line_width: 8
+  font_size: 80
+  hours_to_show: 24
+  points_per_hour: 2
+  decimals: 3
+  show:
+    legend: false
+    labels: false
+    labels_secondary: false
+    extrema: true
+    state: false
+    tooltip: false
+
+# ============================================
+# CARD 5: Three graphs as horizontal-stack (combined)
+# ============================================
+- type: horizontal-stack
+  cards:
+    - type: custom:mini-graph-card
+      name: Use
+      icon: mdi:flash
+      entities:
+        - entity: sensor.hm_use_display
+          name: Use
+          color: "rgba(127, 17, 224, 1)"
+          show_fill: false
+          show_state: false
+        - entity: binary_sensor.hm_nighttime
+          name: Nighttime
+          color: transparent
+          show_line: false
+          show_points: false
+          show_state: false
+          y_axis: secondary
+      line_width: 8
+      font_size: 80
+      hours_to_show: 24
+      points_per_hour: 2
+      decimals: 1
+      show:
+        legend: false
+        labels: false
+        labels_secondary: false
+        extrema: true
+        state: false
+        tooltip: false
+    - type: custom:mini-graph-card
+      name: Solar
+      icon: mdi:weather-sunny
+      entities:
+        - entity: sensor.hm_solar_display
+          name: Solar
+          color: "rgba(233, 188, 5, 1)"
+          show_fill: false
+          show_state: false
+        - entity: binary_sensor.hm_nighttime
+          name: Nighttime
+          color: transparent
+          show_line: false
+          show_points: false
+          show_state: false
+          y_axis: secondary
+      line_width: 8
+      font_size: 80
+      hours_to_show: 24
+      points_per_hour: 2
+      decimals: 1
+      show:
+        legend: false
+        labels: false
+        labels_secondary: false
+        extrema: true
+        state: false
+        tooltip: false
+    - type: custom:mini-graph-card
+      name: Purchase P...
+      icon: mdi:currency-eur
+      entities:
+        - entity: sensor.hm_price_day_curve
+          name: Price
+          color: "rgba(224, 75, 30, 1)"
+          show_fill: false
+          show_state: false
+        - entity: binary_sensor.hm_nighttime
+          name: Nighttime
+          color: transparent
+          show_line: false
+          show_points: false
+          show_state: false
+          y_axis: secondary
+      line_width: 8
+      font_size: 80
+      hours_to_show: 24
+      points_per_hour: 2
+      decimals: 3
+      show:
+        legend: false
+        labels: false
+        labels_secondary: false
+        extrema: true
+        state: false
+        tooltip: false
+
+# ============================================
+# CARD 6: Notifications (below graphs)
+# ============================================
+- type: custom:auto-entities
+  card:
+    type: entities
+    title: Notifications
+    show_header_toggle: false
+    state_color: true
+    show_state: true
+  filter:
+    include:
+      - domain: sensor
+        name: "/^(Alarm|Warning|Info|Tip|Award)/"
+    exclude:
+      - state: "off"
+      - state: unknown
+      - state: unavailable
+  show_empty: true
+  sort:
+    method: last_changed
+    reverse: true

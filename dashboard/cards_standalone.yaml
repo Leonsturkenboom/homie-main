@@ -1,0 +1,253 @@
+# Homie Main - Standalone Cards
+# Copy individual cards to your existing dashboard
+# Requires: mini-graph-card, auto-entities (HACS)
+#
+# PRD Colors:
+# - Use: rgba(127, 17, 224, 1) - purple
+# - Solar: rgba(233, 188, 5, 1) - yellow
+# - Price: rgba(224, 75, 30, 1) - orange
+
+# ============================================
+# CARD 1: Schedule Status + Visualization Selector
+# ============================================
+# type: grid
+# columns: 2
+# square: false
+# cards:
+#   - type: entity
+#     entity: select.hm_home_status
+#     name: Schedule
+#     state_color: true
+#   - type: entity
+#     entity: select.hm_visualization
+#     name: Eenheid
+#     state_color: true
+
+# ============================================
+# CARD 2: Use Graph (Purple)
+# Line: EC power sensor, Value: HM display sensor
+# ============================================
+# type: custom:mini-graph-card
+# name: Use
+# icon: mdi:flash
+# entities:
+#   - entity: sensor.ec_total_power_use
+#     name: Use
+#     color: "rgba(127, 17, 224, 1)"
+#     show_fill: false
+#     show_state: false
+#   - entity: sensor.hm_use_display
+#     name: Display
+#     show_line: false
+#     show_points: false
+#     show_state: true
+#   - entity: binary_sensor.hm_nighttime
+#     name: Nighttime
+#     color: transparent
+#     show_line: false
+#     show_points: false
+#     show_state: false
+#     y_axis: secondary
+# line_width: 8
+# font_size: 80
+# hours_to_show: 24
+# points_per_hour: 2
+# decimals: 0
+# show:
+#   legend: false
+#   labels: false
+#   labels_secondary: false
+#   extrema: true
+#   state: true
+#   tooltip: false
+
+# ============================================
+# CARD 3: Solar Graph (Yellow)
+# Line: EC solar sensor, Value: HM display sensor
+# ============================================
+# type: custom:mini-graph-card
+# name: Solar
+# icon: mdi:solar-power
+# entities:
+#   - entity: sensor.ec_solar_power
+#     name: Solar
+#     color: "rgba(233, 188, 5, 1)"
+#     show_fill: false
+#     show_state: false
+#   - entity: sensor.hm_solar_display
+#     name: Display
+#     show_line: false
+#     show_points: false
+#     show_state: true
+#   - entity: binary_sensor.hm_nighttime
+#     name: Nighttime
+#     color: transparent
+#     show_line: false
+#     show_points: false
+#     show_state: false
+#     y_axis: secondary
+# line_width: 8
+# font_size: 80
+# hours_to_show: 24
+# points_per_hour: 2
+# decimals: 0
+# show:
+#   legend: false
+#   labels: false
+#   labels_secondary: false
+#   extrema: true
+#   state: true
+#   tooltip: false
+
+# ============================================
+# CARD 4: Price Graph (Orange)
+# ============================================
+# type: custom:mini-graph-card
+# name: Price
+# icon: mdi:currency-eur
+# entities:
+#   - entity: sensor.hm_price_day_curve
+#     name: Price
+#     color: "rgba(224, 75, 30, 1)"
+#     show_fill: false
+#     show_state: true
+#   - entity: binary_sensor.hm_nighttime
+#     name: Nighttime
+#     color: transparent
+#     show_line: false
+#     show_points: false
+#     show_state: false
+#     y_axis: secondary
+# line_width: 8
+# font_size: 80
+# hours_to_show: 24
+# points_per_hour: 2
+# decimals: 2
+# show:
+#   legend: false
+#   labels: false
+#   labels_secondary: false
+#   extrema: true
+#   state: true
+#   tooltip: false
+
+# ============================================
+# CARD 5: Three graphs as horizontal-stack (combined)
+# ============================================
+# type: horizontal-stack
+# cards:
+#   - type: custom:mini-graph-card
+#     name: Use
+#     icon: mdi:flash
+#     entities:
+#       - entity: sensor.ec_total_power_use
+#         name: Use
+#         color: "rgba(127, 17, 224, 1)"
+#         show_fill: false
+#         show_state: false
+#       - entity: sensor.hm_use_display
+#         name: Display
+#         show_line: false
+#         show_points: false
+#         show_state: true
+#       - entity: binary_sensor.hm_nighttime
+#         name: Nighttime
+#         color: transparent
+#         show_line: false
+#         show_points: false
+#         show_state: false
+#         y_axis: secondary
+#     line_width: 8
+#     font_size: 80
+#     hours_to_show: 24
+#     points_per_hour: 2
+#     decimals: 0
+#     show:
+#       legend: false
+#       labels: false
+#       labels_secondary: false
+#       extrema: true
+#       state: true
+#       tooltip: false
+#   - type: custom:mini-graph-card
+#     name: Solar
+#     icon: mdi:solar-power
+#     entities:
+#       - entity: sensor.ec_solar_power
+#         name: Solar
+#         color: "rgba(233, 188, 5, 1)"
+#         show_fill: false
+#         show_state: false
+#       - entity: sensor.hm_solar_display
+#         name: Display
+#         show_line: false
+#         show_points: false
+#         show_state: true
+#       - entity: binary_sensor.hm_nighttime
+#         name: Nighttime
+#         color: transparent
+#         show_line: false
+#         show_points: false
+#         show_state: false
+#         y_axis: secondary
+#     line_width: 8
+#     font_size: 80
+#     hours_to_show: 24
+#     points_per_hour: 2
+#     decimals: 0
+#     show:
+#       legend: false
+#       labels: false
+#       labels_secondary: false
+#       extrema: true
+#       state: true
+#       tooltip: false
+#   - type: custom:mini-graph-card
+#     name: Price
+#     icon: mdi:currency-eur
+#     entities:
+#       - entity: sensor.hm_price_day_curve
+#         name: Price
+#         color: "rgba(224, 75, 30, 1)"
+#         show_fill: false
+#         show_state: true
+#       - entity: binary_sensor.hm_nighttime
+#         name: Nighttime
+#         color: transparent
+#         show_line: false
+#         show_points: false
+#         show_state: false
+#         y_axis: secondary
+#     line_width: 8
+#     font_size: 80
+#     hours_to_show: 24
+#     points_per_hour: 2
+#     decimals: 2
+#     show:
+#       legend: false
+#       labels: false
+#       labels_secondary: false
+#       extrema: true
+#       state: true
+#       tooltip: false
+
+# ============================================
+# CARD 6: Notifications (filtered by tag: Homie)
+# ============================================
+# type: custom:auto-entities
+# card:
+#   type: entities
+#   title: Notifications
+#   show_header_toggle: false
+#   state_color: true
+# filter:
+#   include:
+#     - attributes:
+#         tag: Homie
+#   exclude:
+#     - state: "off"
+#     - state: unavailable
+# show_empty: false
+# sort:
+#   method: last_changed
+#   reverse: true

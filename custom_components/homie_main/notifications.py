@@ -1,312 +1,273 @@
 # custom_components/homie_main/notifications.py
-"""Notification system for Homie Main integration."""
+"""Notification service for Homie Main."""
 
 from __future__ import annotations
 
+import asyncio
 import logging
-from dataclasses import dataclass
-from collections import deque
-from email.message import EmailMessage
-from typing import Any, Deque, Dict, Optional
+import smtplib
+import ssl
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
+from typing import Any
 
-import aiosmtplib
-
-from homeassistant.core import HomeAssistant, callback
-from homeassistant.util import dt as dt_util
+from homeassistant.core import HomeAssistant
 
 from .const import (
-    DOMAIN,
-    OPT_NOTIFICATIONS_ENABLED,
-    OPT_PUSH_ENABLED,
-    OPT_EMAIL_ENABLED,
-    OPT_NOTIFICATION_LEVEL,
-    OPT_PUSH_LEVEL,
-    OPT_NOTIFY_TARGET_PUSH,
-    DEFAULT_NOTIFICATIONS_ENABLED,
-    DEFAULT_PUSH_ENABLED,
-    DEFAULT_EMAIL_ENABLED,
-    DEFAULT_NOTIFICATION_LEVEL,
-    DEFAULT_PUSH_LEVEL,
-    DEFAULT_NOTIFY_TARGET_PUSH,
-    # SMTP
+    LEVEL_INFO,
+    LEVEL_TIP,
+    LEVEL_WARNING,
+    LEVEL_ALERT,
+    LEVEL_AWARD,
+    LEVEL_HIERARCHY,
     OPT_SMTP_HOST,
     OPT_SMTP_PORT,
-    OPT_SMTP_STARTTLS,
     OPT_SMTP_SSL,
+    OPT_SMTP_STARTTLS,
     OPT_SMTP_USERNAME,
     OPT_SMTP_PASSWORD,
-    OPT_SMTP_FROM,
-    OPT_SMTP_TO_WARNINGS,
-    OPT_SMTP_TO_ALERTS,
+    OPT_SMTP_TO,
+    CONF_PUSH_GENERAL,
+    CONF_PUSH_WARNINGS,
+    CONF_PUSH_ALERTS,
+    CONF_MAIL_WARNINGS,
+    CONF_MAIL_ALERTS,
     DEFAULT_SMTP_HOST,
     DEFAULT_SMTP_PORT,
-    DEFAULT_SMTP_STARTTLS,
     DEFAULT_SMTP_SSL,
+    DEFAULT_SMTP_STARTTLS,
     DEFAULT_SMTP_USERNAME,
     DEFAULT_SMTP_PASSWORD,
-    DEFAULT_SMTP_FROM,
-    DEFAULT_SMTP_TO_WARNINGS,
-    DEFAULT_SMTP_TO_ALERTS,
-    # Others
-    EVENT_HOMIE_NOTIFICATION,
-    NOTIFICATION_STORE_KEY,
-    NOTIFICATION_HISTORY_SIZE,
-    LEVEL_HIERARCHY,
+    DEFAULT_SMTP_TO,
 )
 
 _LOGGER = logging.getLogger(__name__)
 
-
-@dataclass
-class HomieNotification:
-    """Represents a notification in the Homie system."""
-
-    ts: str
-    level: str
-    title: str
-    message: str
-    source: str
-    tag: str
+# Level to emoji mapping
+LEVEL_EMOJI = {
+    LEVEL_INFO: "ℹ️",
+    LEVEL_TIP: "💡",
+    LEVEL_WARNING: "⚠️",
+    LEVEL_ALERT: "🚨",
+    LEVEL_AWARD: "🏆",
+}
 
 
-def _now_iso() -> str:
-    """Return current UTC time as ISO string."""
-    return dt_util.utcnow().isoformat()
+class NotificationService:
+    """Service for sending notifications via email and push."""
 
+    def __init__(self, hass: HomeAssistant, config: dict[str, Any]) -> None:
+        """Initialize the notification service."""
+        self.hass = hass
+        self._config = config
 
-def _normalize_level(level: str | None) -> str:
-    """Normalize notification level to lowercase."""
-    if not level:
-        return "info"
-    return str(level).strip().lower()
+    def _should_send_push(self, level: str) -> bool:
+        """Check if push notification should be sent for this level."""
+        level_lower = level.lower()
+        level_value = LEVEL_HIERARCHY.get(level_lower, 0)
 
+        # Check config settings
+        if level_lower in ("alert",) and self._config.get(CONF_PUSH_ALERTS, True):
+            return True
+        if level_lower in ("warning",) and self._config.get(CONF_PUSH_WARNINGS, True):
+            return True
+        if level_lower in ("info", "tip", "award") and self._config.get(CONF_PUSH_GENERAL, True):
+            return True
 
-def _parse_recipients(raw: str) -> list[str]:
-    """Parse comma-separated email recipients."""
-    if not raw:
-        return []
-    return [x.strip() for x in raw.split(",") if x.strip()]
+        return False
 
+    def _should_send_email(self, level: str) -> bool:
+        """Check if email notification should be sent for this level."""
+        level_lower = level.lower()
 
-def _get_smtp_recipients(level: str, entry_options: dict[str, Any]) -> list[str]:
-    """Determine SMTP recipients based on notification level.
+        # Only warnings and alerts can trigger emails
+        if level_lower == "alert" and self._config.get(CONF_MAIL_ALERTS, True):
+            return True
+        if level_lower == "warning" and self._config.get(CONF_MAIL_WARNINGS, True):
+            return True
 
-    Warnings go to TO_WARNINGS, Alerts go to TO_ALERTS.
-    """
-    level_lower = _normalize_level(level)
+        return False
 
-    # Alerts go to TO_ALERTS
-    if level_lower == "alert":
-        to_raw = entry_options.get(OPT_SMTP_TO_ALERTS, DEFAULT_SMTP_TO_ALERTS)
-        return _parse_recipients(to_raw)
-
-    # Warnings and below go to TO_WARNINGS
-    to_raw = entry_options.get(OPT_SMTP_TO_WARNINGS, DEFAULT_SMTP_TO_WARNINGS)
-    return _parse_recipients(to_raw)
-
-
-def _should_send_by_level(
-    level: str, threshold_level: str
-) -> bool:
-    """Check if notification should be sent based on level threshold."""
-    if threshold_level == "All":
-        return True
-
-    level_value = LEVEL_HIERARCHY.get(_normalize_level(level), 0)
-    threshold_value = LEVEL_HIERARCHY.get(_normalize_level(threshold_level), 999)
-
-    return level_value >= threshold_value
-
-
-async def async_setup_notifications(hass: HomeAssistant) -> None:
-    """Setup the Homie notification system."""
-    if NOTIFICATION_STORE_KEY not in hass.data:
-        hass.data[NOTIFICATION_STORE_KEY] = {
-            "items": deque(maxlen=NOTIFICATION_HISTORY_SIZE)
-        }
-
-    @callback
-    def _append(item: HomieNotification) -> None:
-        """Add notification to history."""
-        hass.data[NOTIFICATION_STORE_KEY]["items"].appendleft(item)
-
-    async def _call_notify_service(target: str, payload: dict[str, Any]) -> None:
-        """Call a notification service safely."""
-        if not target or "." not in target:
-            return
-        domain, service = target.split(".", 1)
-        try:
-            await hass.services.async_call(domain, service, payload, blocking=False)
-        except Exception as err:
-            _LOGGER.warning("Failed to call notify service %s: %s", target, err)
-
-    async def _send_smtp_email(
-        entry_options: dict[str, Any], level: str, subject: str, body: str
-    ) -> None:
-        """Send email notification via SMTP."""
-        host = str(entry_options.get(OPT_SMTP_HOST, DEFAULT_SMTP_HOST)).strip()
-        port = int(entry_options.get(OPT_SMTP_PORT, DEFAULT_SMTP_PORT))
-        starttls = bool(entry_options.get(OPT_SMTP_STARTTLS, DEFAULT_SMTP_STARTTLS))
-        use_ssl = bool(entry_options.get(OPT_SMTP_SSL, DEFAULT_SMTP_SSL))
-        username = str(entry_options.get(OPT_SMTP_USERNAME, DEFAULT_SMTP_USERNAME))
-        password = str(entry_options.get(OPT_SMTP_PASSWORD, DEFAULT_SMTP_PASSWORD))
-        from_addr = str(entry_options.get(OPT_SMTP_FROM, DEFAULT_SMTP_FROM)).strip()
-
-        # Get recipients based on level
-        to_addrs = _get_smtp_recipients(level, entry_options)
-
-        # Not configured -> no-op
-        if not host or not from_addr or not to_addrs:
-            _LOGGER.debug("SMTP not fully configured, skipping email")
-            return
-
-        msg = EmailMessage()
-        msg["From"] = from_addr
-        msg["To"] = ", ".join(to_addrs)
-        msg["Subject"] = subject
-        msg.set_content(body)
-
-        try:
-            await aiosmtplib.send(
-                msg,
-                hostname=host,
-                port=port,
-                start_tls=starttls,
-                use_tls=use_ssl,
-                username=username or None,
-                password=password or None,
-                timeout=15,
-            )
-            _LOGGER.debug("Email sent to %s", ", ".join(to_addrs))
-        except Exception as err:
-            _LOGGER.warning("Failed to send email: %s", err)
-
-    async def _publish(
-        *,
+    async def send_notification(
+        self,
         title: str,
         message: str,
-        level: str = "info",
-        source: str = DOMAIN,
-        entry_options: Optional[dict[str, Any]] = None,
-        push: bool = True,
-        email: bool = False,
-        persistent: bool = True,
-    ) -> None:
-        """Publish a notification with level filtering."""
-        tag = "homie"
-        lvl = _normalize_level(level)
+        level: str = LEVEL_INFO,
+        push: bool | None = None,
+        email: bool | None = None,
+    ) -> dict[str, Any]:
+        """Send a notification via configured channels.
 
-        # Create notification item
-        item = HomieNotification(
-            ts=_now_iso(),
-            level=lvl,
-            title=title,
-            message=message,
-            source=source,
-            tag=tag,
-        )
-        _append(item)
+        Args:
+            title: Notification title
+            message: Notification message body
+            level: Notification level (Info, Tip, Warning, Alert, Award)
+            push: Override push setting (None = use config)
+            email: Override email setting (None = use config)
 
-        # Always create persistent notification if requested
-        if persistent:
-            await hass.services.async_call(
+        Returns:
+            Dict with results for each channel
+        """
+        results: dict[str, Any] = {
+            "push_sent": False,
+            "email_sent": False,
+            "push_error": None,
+            "email_error": None,
+        }
+
+        emoji = LEVEL_EMOJI.get(level, "")
+
+        # Format title: "Homie - 🚨 Title"
+        full_title = f"Homie - {emoji} {title}".strip()
+
+        # Determine if we should send
+        should_push = push if push is not None else self._should_send_push(level)
+        should_email = email if email is not None else self._should_send_email(level)
+
+        # Send push notification
+        if should_push:
+            try:
+                await self._send_push(full_title, message)
+                results["push_sent"] = True
+                _LOGGER.info("Push notification sent: %s", title)
+            except Exception as err:
+                results["push_error"] = str(err)
+                _LOGGER.error("Failed to send push notification: %s", err)
+
+        # Send email notification
+        if should_email:
+            try:
+                await self._send_email(full_title, message, level)
+                results["email_sent"] = True
+                _LOGGER.info("Email notification sent: %s", title)
+            except Exception as err:
+                results["email_error"] = str(err)
+                _LOGGER.error("Failed to send email notification: %s", err)
+
+        return results
+
+    async def _send_push(self, title: str, message: str) -> None:
+        """Send push notification via Home Assistant notify service."""
+        # Use persistent_notification as fallback, or mobile_app if available
+        # First try to find mobile app notify services
+        notify_services = [
+            service
+            for service in self.hass.services.async_services().get("notify", {})
+            if service.startswith("mobile_app_")
+        ]
+
+        if notify_services:
+            # Send to all mobile app services
+            for service_name in notify_services:
+                await self.hass.services.async_call(
+                    "notify",
+                    service_name,
+                    {
+                        "title": title,
+                        "message": message,
+                    },
+                    blocking=True,
+                )
+        else:
+            # Fallback to persistent notification
+            await self.hass.services.async_call(
                 "persistent_notification",
                 "create",
                 {
-                    "title": f"[{tag}] {title}",
-                    "message": f"{message}\n\nsource={source} level={lvl} tag={tag}",
-                    "notification_id": f"{tag}_{source}_{lvl}",
+                    "title": title,
+                    "message": message,
+                    "notification_id": f"homie_main_{hash(title + message) % 10000}",
                 },
-                blocking=False,
+                blocking=True,
             )
 
-        # Get options with defaults
-        if entry_options is None:
-            entry_options = {}
+    async def _send_email(self, title: str, message: str, level: str) -> None:
+        """Send email notification via SMTP."""
+        smtp_host = self._config.get(OPT_SMTP_HOST, DEFAULT_SMTP_HOST)
+        smtp_port = self._config.get(OPT_SMTP_PORT, DEFAULT_SMTP_PORT)
+        smtp_ssl = self._config.get(OPT_SMTP_SSL, DEFAULT_SMTP_SSL)
+        smtp_starttls = self._config.get(OPT_SMTP_STARTTLS, DEFAULT_SMTP_STARTTLS)
+        smtp_username = self._config.get(OPT_SMTP_USERNAME, DEFAULT_SMTP_USERNAME)
+        smtp_password = self._config.get(OPT_SMTP_PASSWORD, DEFAULT_SMTP_PASSWORD)
+        smtp_to = self._config.get(OPT_SMTP_TO, DEFAULT_SMTP_TO)
 
-        notifications_enabled = entry_options.get(
-            OPT_NOTIFICATIONS_ENABLED, DEFAULT_NOTIFICATIONS_ENABLED
-        )
-        push_enabled = entry_options.get(OPT_PUSH_ENABLED, DEFAULT_PUSH_ENABLED)
-        email_enabled = entry_options.get(OPT_EMAIL_ENABLED, DEFAULT_EMAIL_ENABLED)
-        notification_level = entry_options.get(
-            OPT_NOTIFICATION_LEVEL, DEFAULT_NOTIFICATION_LEVEL
-        )
-        push_level = entry_options.get(OPT_PUSH_LEVEL, DEFAULT_PUSH_LEVEL)
-        push_target = entry_options.get(
-            OPT_NOTIFY_TARGET_PUSH, DEFAULT_NOTIFY_TARGET_PUSH
-        )
-
-        if not notifications_enabled:
+        if not smtp_to:
+            _LOGGER.warning("No email recipients configured, skipping email")
             return
 
-        # Push notification with level filtering
-        if push and push_enabled:
-            if _should_send_by_level(lvl, push_level):
-                await _call_notify_service(
-                    push_target,
-                    {
-                        "message": f"[{tag}] {title}\n{message}",
-                        "data": {"tag": tag},
-                    },
-                )
+        # Parse recipients (comma-separated)
+        recipients = [r.strip() for r in smtp_to.split(",") if r.strip()]
+        if not recipients:
+            _LOGGER.warning("No valid email recipients found")
+            return
 
-        # Email notification with level filtering
-        if email and email_enabled:
-            if _should_send_by_level(lvl, notification_level):
-                await _send_smtp_email(
-                    entry_options,
-                    lvl,
-                    subject=f"[{tag}] {title}",
-                    body=f"{message}\n\nsource={source}\nlevel={lvl}\ntag={tag}\n",
-                )
+        # Create email
+        msg = MIMEMultipart("alternative")
+        msg["Subject"] = title
+        msg["From"] = smtp_username
+        msg["To"] = ", ".join(recipients)
 
-    async def handle_service(call) -> None:
-        """Handle homie_main.notify service calls."""
-        data = call.data or {}
-        await _publish(
-            title=str(data.get("title", "Notification")),
-            message=str(data.get("message", "")),
-            level=str(data.get("level", "info")),
-            source=str(data.get("source", DOMAIN)),
-            entry_options=data.get("entry_options"),
-            push=bool(data.get("push", True)),
-            email=bool(data.get("email", False)),
-            persistent=bool(data.get("persistent", True)),
+        # Plain text version
+        text_content = f"{title}\n\n{message}\n\n---\nAutomatisch verzonden vanuit Homie, a.u.b. niet reageren."
+
+        # HTML version with black/white styling
+        html_content = f"""
+        <html>
+        <body style="font-family: Arial, sans-serif; padding: 20px; color: #000;">
+            <p style="color: #666; font-size: 11px; margin-bottom: 20px;">
+                This is an auto-generated email, please do not reply.
+            </p>
+            <div style="border-left: 4px solid #000; padding-left: 15px;">
+                <h2 style="color: #000; margin: 0 0 10px 0;">{title}</h2>
+                <p style="color: #333; line-height: 1.6;">{message}</p>
+            </div>
+            <hr style="border: none; border-top: 1px solid #ccc; margin: 20px 0;">
+            <p style="color: #999; font-size: 12px;">
+                Automatisch verzonden vanuit Homie, a.u.b. niet reageren.
+            </p>
+        </body>
+        </html>
+        """
+
+        msg.attach(MIMEText(text_content, "plain"))
+        msg.attach(MIMEText(html_content, "html"))
+
+        # Send email in executor to not block
+        await self.hass.async_add_executor_job(
+            self._send_email_sync,
+            smtp_host,
+            smtp_port,
+            smtp_ssl,
+            smtp_starttls,
+            smtp_username,
+            smtp_password,
+            recipients,
+            msg,
         )
 
-    hass.services.async_register(DOMAIN, "notify", handle_service)
+    def _send_email_sync(
+        self,
+        host: str,
+        port: int,
+        use_ssl: bool,
+        use_starttls: bool,
+        username: str,
+        password: str,
+        recipients: list[str],
+        msg: MIMEMultipart,
+    ) -> None:
+        """Send email synchronously (called from executor)."""
+        context = ssl.create_default_context()
 
-    @callback
-    def handle_event(event) -> None:
-        """Handle homie_notification events."""
-        ed = event.data or {}
-        item = HomieNotification(
-            ts=_now_iso(),
-            level=_normalize_level(ed.get("level")),
-            title=str(ed.get("title", "Notification")),
-            message=str(ed.get("message", "")),
-            source=str(ed.get("source", "unknown")),
-            tag="homie",
-        )
-        _append(item)
-
-    hass.bus.async_listen(EVENT_HOMIE_NOTIFICATION, handle_event)
-    _LOGGER.info("Homie notification system initialized")
-
-
-def get_feed(hass: HomeAssistant) -> list[Dict[str, Any]]:
-    """Get notification feed (last N notifications)."""
-    store = hass.data.get(NOTIFICATION_STORE_KEY, {})
-    items: Deque[HomieNotification] = store.get("items", deque())
-    return [
-        {
-            "ts": i.ts,
-            "level": i.level,
-            "title": i.title,
-            "message": i.message,
-            "source": i.source,
-            "tag": i.tag,
-        }
-        for i in list(items)
-    ]
+        if use_ssl:
+            # SSL connection from the start
+            with smtplib.SMTP_SSL(host, port, context=context) as server:
+                server.login(username, password)
+                server.sendmail(username, recipients, msg.as_string())
+        else:
+            # Plain connection, optionally upgrade to TLS
+            with smtplib.SMTP(host, port) as server:
+                if use_starttls:
+                    server.starttls(context=context)
+                server.login(username, password)
+                server.sendmail(username, recipients, msg.as_string())

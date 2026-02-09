@@ -2,65 +2,86 @@
   "config": {
     "step": {
       "user": {
-        "title": "Homie Main setup",
-        "description": "Configure the core behavior for this site.",
+        "title": "General settings",
+        "description": "Configure the basic settings for Homie Main.",
         "data": {
           "site_name": "Site name",
-          "presence_mode": "Presence detection type"
+          "admin_emails": "Admin email(s)",
+          "location_type": "Location type",
+          "push_enabled": "Push notifications",
+          "push_general": "General",
+          "push_alerts": "Alerts",
+          "push_warnings": "Warnings",
+          "mail_enabled": "Email notifications",
+          "mail_warnings": "Warnings",
+          "mail_alerts": "Alerts",
+          "presence_detection": "Presence & scheduling"
+        },
+        "data_description": {
+          "site_name": "Name of your home/location (used in notifications)",
+          "admin_emails": "Comma-separated list of admin email addresses",
+          "location_type": "Select whether this is a home or business location",
+          "push_enabled": "Enable or disable push notifications",
+          "mail_enabled": "Enable or disable email notifications",
+          "presence_detection": "Enable presence detection and work schedule"
         }
       },
-      "presence_inputs": {
+      "presence": {
+        "title": "Presence detection",
+        "description": "Select which presence detection methods to use.",
+        "data": {
+          "use_gps": "GPS location",
+          "use_wifi": "WiFi connection",
+          "use_motion": "Motion sensors",
+          "use_calendar": "Calendar events",
+          "use_schedule": "Work schedule"
+        },
+        "data_description": {
+          "use_gps": "Use GPS/device tracker for presence detection",
+          "use_wifi": "Use WiFi connection status for presence detection",
+          "use_motion": "Use motion sensors for presence detection",
+          "use_calendar": "Use calendar events for holiday/guest status",
+          "use_schedule": "Automatic Work/Away status based on work hours"
+        }
+      },
+      "presence_followup": {
         "title": "Presence configuration",
-        "description": "Select the entities used for presence detection.",
+        "description": "Configure the entities for presence detection.",
         "data": {
-          "calendar_entity": "Calendar entity",
           "gps_entities": "GPS presence entities",
-          "wifi_entities": "WiFi presence entities",
-          "motion_entities": "Motion sensors"
+          "gps_distance": "GPS distance from home",
+          "ping_entities": "WiFi presence entities",
+          "motion_entities": "Motion sensors",
+          "motion_away_hours": "Motion timeout (hours)",
+          "calendar_entities": "Calendar entities",
+          "schedule_monday": "Monday",
+          "schedule_monday_times": "Times",
+          "schedule_tuesday": "Tuesday",
+          "schedule_tuesday_times": "Times",
+          "schedule_wednesday": "Wednesday",
+          "schedule_wednesday_times": "Times",
+          "schedule_thursday": "Thursday",
+          "schedule_thursday_times": "Times",
+          "schedule_friday": "Friday",
+          "schedule_friday_times": "Times",
+          "schedule_saturday": "Saturday",
+          "schedule_saturday_times": "Times",
+          "schedule_sunday": "Sunday",
+          "schedule_sunday_times": "Times"
+        },
+        "data_description": {
+          "gps_entities": "Required: Mobile App integration or other device_tracker with GPS.",
+          "gps_distance": "Distance in meters to consider as 'home'.",
+          "ping_entities": "Required: Ping integration. Install via Settings > Devices & Services > Add > Ping.",
+          "motion_entities": "Required: Motion sensors from e.g. Zigbee, Z-Wave or ESPHome integration.",
+          "motion_away_hours": "Hours without motion before marking as away.",
+          "calendar_entities": "Required: Calendar integration (Google Calendar, CalDAV or Local Calendar). Note: status only updates at event start/end."
         }
       },
-      "email_smtp": {
-        "title": "Email notification setup (optional)",
-        "description": "Configure SMTP for email notifications. Leave empty to skip.",
+      "kpi_mapping": {
+        "title": "KPI sensor mapping",
+        "description": "Map your energy sensors to the KPI dashboard. These will be pre-filled if energy_core is installed.",
         "data": {
-          "smtp_host": "SMTP server",
-          "smtp_port": "SMTP port",
-          "smtp_ssl": "Use SSL",
-          "smtp_starttls": "Use STARTTLS",
-          "smtp_username": "Username",
-          "smtp_password": "Password",
-          "smtp_from": "From address",
-          "smtp_to_warnings": "Recipients for warnings",
-          "smtp_to_alerts": "Recipients for alerts"
-        }
-      }
-    },
-    "error": {
-      "empty_site_name": "Site name cannot be empty",
-      "calendar_not_found": "Calendar entity not found"
-    }
-  },
-  "options": {
-    "step": {
-      "init": {
-        "title": "Homie Main options",
-        "description": "Adjust user settings and KPI mappings.",
-        "data": {
-          "notifications_enabled": "Enable notifications",
-          "push_enabled": "Enable push notifications",
-          "email_enabled": "Enable email notifications",
-          "notification_level": "Notification level",
-          "push_level": "Push notification level",
-          "notify_target": "Notify service target",
-          "smtp_host": "SMTP server",
-          "smtp_port": "SMTP port",
-          "smtp_ssl": "Use SSL",
-          "smtp_starttls": "Use STARTTLS",
-          "smtp_username": "Username",
-          "smtp_password": "Password",
-          "smtp_from": "From address",
-          "smtp_to_warnings": "Recipients for warnings",
-          "smtp_to_alerts": "Recipients for alerts",
           "kpi_power_use": "Power use sensor",
           "kpi_day_energy_use": "Day energy use sensor",
           "kpi_solar_power": "Solar power sensor",
@@ -68,6 +89,161 @@
           "kpi_forecast_use": "Forecast use sensor",
           "kpi_solar_forecast": "Solar forecast sensor",
           "kpi_purchase_price": "Purchase price sensor"
+        },
+        "data_description": {
+          "kpi_power_use": "Current power consumption (W)",
+          "kpi_day_energy_use": "Today's energy consumption (kWh)",
+          "kpi_solar_power": "Current solar production (W)",
+          "kpi_solar_day_energy": "Today's solar production (kWh)",
+          "kpi_forecast_use": "Forecasted energy use (kWh)",
+          "kpi_solar_forecast": "Forecasted solar production (kWh)",
+          "kpi_purchase_price": "Current purchase price (EUR/kWh)"
+        }
+      }
+    },
+    "error": {
+      "empty_site_name": "Site name cannot be empty",
+      "invalid_email": "Invalid email address format"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Homie Main options",
+        "description": "Configure notifications, presence detection, and email recipients.",
+        "data": {
+          "push_enabled": "Push notifications",
+          "push_general": "General",
+          "push_warnings": "Warnings",
+          "push_alerts": "Alerts",
+          "mail_enabled": "Email notifications",
+          "mail_warnings": "Warnings",
+          "mail_alerts": "Alerts",
+          "use_gps": "GPS detection",
+          "use_wifi": "WiFi detection",
+          "use_motion": "Motion detection",
+          "use_calendar": "Calendar detection",
+          "smtp_to": "Recipient email(s)",
+          "schedule_monday": "Monday",
+          "schedule_monday_times": "Times",
+          "schedule_tuesday": "Tuesday",
+          "schedule_tuesday_times": "Times",
+          "schedule_wednesday": "Wednesday",
+          "schedule_wednesday_times": "Times",
+          "schedule_thursday": "Thursday",
+          "schedule_thursday_times": "Times",
+          "schedule_friday": "Friday",
+          "schedule_friday_times": "Times",
+          "schedule_saturday": "Saturday",
+          "schedule_saturday_times": "Times",
+          "schedule_sunday": "Sunday",
+          "schedule_sunday_times": "Times",
+          "kpi_power_use": "Power use sensor",
+          "kpi_day_energy_use": "Day energy use sensor",
+          "kpi_solar_power": "Solar power sensor",
+          "kpi_solar_day_energy": "Solar day energy sensor",
+          "kpi_forecast_use": "Forecast use sensor",
+          "kpi_solar_forecast": "Solar forecast sensor",
+          "kpi_purchase_price": "Purchase price sensor"
+        },
+        "data_description": {
+          "smtp_to": "Comma-separated list of recipient email addresses"
+        }
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "hm_presence_source": {
+        "name": "Presence Source"
+      },
+      "hm_manual_override_active": {
+        "name": "Manual Override Active"
+      },
+      "hm_manual_override_until": {
+        "name": "Manual Override Until"
+      },
+      "hm_operating_mode": {
+        "name": "Operating Mode",
+        "state": {
+          "Active": "Active",
+          "Stand-by": "Stand-by",
+          "Hibernation": "Hibernation"
+        }
+      },
+      "hm_price_day_curve": {
+        "name": "Price Day Curve"
+      },
+      "hm_use_display": {
+        "name": "Use Display"
+      },
+      "hm_solar_display": {
+        "name": "Solar Display"
+      }
+    },
+    "select": {
+      "hm_home_status": {
+        "name": "Home Status",
+        "state": {
+          "Home": "Home",
+          "Away": "Away",
+          "Holiday": "Holiday",
+          "Guests": "Guests",
+          "Work": "Work"
+        }
+      },
+      "hm_operating_mode": {
+        "name": "Operating Mode",
+        "state": {
+          "Active": "Active",
+          "Stand-by": "Stand-by",
+          "Hibernation": "Hibernation"
+        }
+      },
+      "hm_visualization": {
+        "name": "Visualization",
+        "state": {
+          "W": "W",
+          "kWh/day": "kWh/day",
+          "€/day": "€/day"
+        }
+      }
+    },
+    "button": {
+      "hm_clear_override": {
+        "name": "Clear Override"
+      }
+    },
+    "binary_sensor": {
+      "hm_nighttime": {
+        "name": "Nighttime"
+      }
+    }
+  },
+  "services": {
+    "send_notification": {
+      "name": "Send Notification",
+      "description": "Send a notification via push and/or email",
+      "fields": {
+        "title": {
+          "name": "Title",
+          "description": "Notification title"
+        },
+        "message": {
+          "name": "Message",
+          "description": "Notification message body"
+        },
+        "level": {
+          "name": "Level",
+          "description": "Notification level (Info, Tip, Warning, Alert, Award)"
+        },
+        "push": {
+          "name": "Push notification",
+          "description": "Override push notification setting"
+        },
+        "email": {
+          "name": "Email notification",
+          "description": "Override email notification setting"
         }
       }
     }

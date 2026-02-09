@@ -1,0 +1,61 @@
+# Homie Main - Config Board (PRD Output 14)
+# Copy this card configuration to your Lovelace dashboard
+
+type: entities
+title: Homie Instellingen
+show_header_toggle: false
+entities:
+  # === NOTIFICATIONS ===
+  - type: section
+    label: Push Notificaties
+
+  - entity: switch.hm_push_enabled
+    name: Push ingeschakeld
+    icon: mdi:bell
+
+  - entity: switch.hm_push_general
+    name: Algemene meldingen
+    icon: mdi:bell-outline
+
+  - entity: switch.hm_push_warnings
+    name: Waarschuwingen
+    icon: mdi:bell-alert
+
+  - entity: switch.hm_push_alerts
+    name: Alerts
+    icon: mdi:bell-ring
+
+  - type: section
+    label: Email Notificaties
+
+  - entity: switch.hm_mail_enabled
+    name: Email ingeschakeld
+    icon: mdi:email
+
+  - entity: switch.hm_mail_warnings
+    name: Waarschuwingen
+    icon: mdi:email-alert
+
+  - entity: switch.hm_mail_alerts
+    name: Alerts
+    icon: mdi:email-fast
+
+  # === PRESENCE DETECTION ===
+  - type: section
+    label: Presence Detectie
+
+  - entity: switch.hm_use_gps
+    name: GPS locatie
+    icon: mdi:crosshairs-gps
+
+  - entity: switch.hm_use_wifi
+    name: WiFi verbinding
+    icon: mdi:wifi
+
+  - entity: switch.hm_use_motion
+    name: Bewegingssensoren
+    icon: mdi:motion-sensor
+
+  - entity: switch.hm_use_calendar
+    name: Agenda
+    icon: mdi:calendar

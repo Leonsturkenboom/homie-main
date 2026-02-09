@@ -1,45 +1,45 @@
-notify:
-  name: Homie notify
-  description: Publish a Homie-tagged notification to the Homie feed and optionally send push/persistent notifications.
+send_notification:
+  name: Send Notification
+  description: Send a notification via push and/or email
   fields:
     title:
       name: Title
-      example: "Energy warning"
+      description: Notification title
       required: true
+      example: "Energy Alert"
       selector:
         text:
     message:
       name: Message
-      example: "PV data is unavailable > 1 hour."
+      description: Notification message body
       required: true
+      example: "Your energy consumption is above normal"
       selector:
         text:
+          multiline: true
     level:
       name: Level
-      example: "warning"
+      description: Notification level (determines urgency and channels)
       required: false
+      default: "Info"
+      example: "Warning"
       selector:
         select:
           options:
-            - "info"
-            - "tip"
-            - "warning"
-            - "alert"
-    source:
-      name: Source
-      example: "energy_core"
-      required: false
-      selector:
-        text:
+            - "Info"
+            - "Tip"
+            - "Warning"
+            - "Alert"
+            - "Award"
     push:
-      name: Send push
+      name: Push notification
+      description: Override push notification setting (leave empty to use config)
       required: false
-      default: true
       selector:
         boolean:
-    persistent:
-      name: Create persistent notification
+    email:
+      name: Email notification
+      description: Override email notification setting (leave empty to use config)
       required: false
-      default: true
       selector:
         boolean:
