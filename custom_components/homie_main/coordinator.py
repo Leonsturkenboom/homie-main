@@ -262,9 +262,7 @@ class HomieMainCoordinator(DataUpdateCoordinator[HomieMainData]):
                 enabled=self._config.get(CONF_USE_SCHEDULE, False),
                 schedule=self._config.get(CONF_SCHEDULE, DEFAULT_SCHEDULE),
             ),
-            price_series_state=PriceSeriesState(
-                date=dt_util.now().strftime("%Y-%m-%d"),
-            ),
+            price_series_state=PriceSeriesState(),
             weather_state=WeatherForecastState(),
             location_type=location_type,
             operating_mode=OP_MODE_ACTIVE,
