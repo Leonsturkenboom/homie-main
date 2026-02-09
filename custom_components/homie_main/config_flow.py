@@ -331,13 +331,6 @@ class HomieMain2ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             data_schema=schema,
         )
 
-    def _kpi_default(self, default_entity: str) -> str:
-        """Return default entity ID only if it exists in HA, otherwise empty string."""
-        state = self.hass.states.get(default_entity)
-        if state is not None:
-            return default_entity
-        return ""
-
     async def async_step_kpi_mapping(
         self, user_input: dict[str, Any] | None = None
     ) -> FlowResult:
@@ -353,27 +346,13 @@ class HomieMain2ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         schema = vol.Schema(
             {
-                vol.Optional(CONF_KPI_POWER_USE, default=self._kpi_default(DEFAULT_KPI_POWER_USE)): selector.EntitySelector(
-                    selector.EntitySelectorConfig(domain="sensor")
-                ),
-                vol.Optional(CONF_KPI_DAY_ENERGY_USE, default=self._kpi_default(DEFAULT_KPI_DAY_ENERGY_USE)): selector.EntitySelector(
-                    selector.EntitySelectorConfig(domain="sensor")
-                ),
-                vol.Optional(CONF_KPI_SOLAR_POWER, default=self._kpi_default(DEFAULT_KPI_SOLAR_POWER)): selector.EntitySelector(
-                    selector.EntitySelectorConfig(domain="sensor")
-                ),
-                vol.Optional(CONF_KPI_SOLAR_DAY_ENERGY, default=self._kpi_default(DEFAULT_KPI_SOLAR_DAY_ENERGY)): selector.EntitySelector(
-                    selector.EntitySelectorConfig(domain="sensor")
-                ),
-                vol.Optional(CONF_KPI_FORECAST_USE, default=self._kpi_default(DEFAULT_KPI_FORECAST_USE)): selector.EntitySelector(
-                    selector.EntitySelectorConfig(domain="sensor")
-                ),
-                vol.Optional(CONF_KPI_SOLAR_FORECAST, default=self._kpi_default(DEFAULT_KPI_SOLAR_FORECAST)): selector.EntitySelector(
-                    selector.EntitySelectorConfig(domain="sensor")
-                ),
-                vol.Optional(CONF_KPI_PURCHASE_PRICE, default=self._kpi_default(DEFAULT_KPI_PURCHASE_PRICE)): selector.EntitySelector(
-                    selector.EntitySelectorConfig(domain="sensor")
-                ),
+                vol.Optional(CONF_KPI_POWER_USE, default=DEFAULT_KPI_POWER_USE): selector.TextSelector(),
+                vol.Optional(CONF_KPI_DAY_ENERGY_USE, default=DEFAULT_KPI_DAY_ENERGY_USE): selector.TextSelector(),
+                vol.Optional(CONF_KPI_SOLAR_POWER, default=DEFAULT_KPI_SOLAR_POWER): selector.TextSelector(),
+                vol.Optional(CONF_KPI_SOLAR_DAY_ENERGY, default=DEFAULT_KPI_SOLAR_DAY_ENERGY): selector.TextSelector(),
+                vol.Optional(CONF_KPI_FORECAST_USE, default=DEFAULT_KPI_FORECAST_USE): selector.TextSelector(),
+                vol.Optional(CONF_KPI_SOLAR_FORECAST, default=DEFAULT_KPI_SOLAR_FORECAST): selector.TextSelector(),
+                vol.Optional(CONF_KPI_PURCHASE_PRICE, default=DEFAULT_KPI_PURCHASE_PRICE): selector.TextSelector(),
             }
         )
 
@@ -521,31 +500,31 @@ class HomieMain2OptionsFlow(config_entries.OptionsFlow):
             vol.Optional(
                 CONF_KPI_POWER_USE,
                 default=current.get(CONF_KPI_POWER_USE, DEFAULT_KPI_POWER_USE),
-            ): selector.EntitySelector(selector.EntitySelectorConfig(domain="sensor")),
+            ): selector.TextSelector(),
             vol.Optional(
                 CONF_KPI_DAY_ENERGY_USE,
                 default=current.get(CONF_KPI_DAY_ENERGY_USE, DEFAULT_KPI_DAY_ENERGY_USE),
-            ): selector.EntitySelector(selector.EntitySelectorConfig(domain="sensor")),
+            ): selector.TextSelector(),
             vol.Optional(
                 CONF_KPI_SOLAR_POWER,
                 default=current.get(CONF_KPI_SOLAR_POWER, DEFAULT_KPI_SOLAR_POWER),
-            ): selector.EntitySelector(selector.EntitySelectorConfig(domain="sensor")),
+            ): selector.TextSelector(),
             vol.Optional(
                 CONF_KPI_SOLAR_DAY_ENERGY,
                 default=current.get(CONF_KPI_SOLAR_DAY_ENERGY, DEFAULT_KPI_SOLAR_DAY_ENERGY),
-            ): selector.EntitySelector(selector.EntitySelectorConfig(domain="sensor")),
+            ): selector.TextSelector(),
             vol.Optional(
                 CONF_KPI_FORECAST_USE,
                 default=current.get(CONF_KPI_FORECAST_USE, DEFAULT_KPI_FORECAST_USE),
-            ): selector.EntitySelector(selector.EntitySelectorConfig(domain="sensor")),
+            ): selector.TextSelector(),
             vol.Optional(
                 CONF_KPI_SOLAR_FORECAST,
                 default=current.get(CONF_KPI_SOLAR_FORECAST, DEFAULT_KPI_SOLAR_FORECAST),
-            ): selector.EntitySelector(selector.EntitySelectorConfig(domain="sensor")),
+            ): selector.TextSelector(),
             vol.Optional(
                 CONF_KPI_PURCHASE_PRICE,
                 default=current.get(CONF_KPI_PURCHASE_PRICE, DEFAULT_KPI_PURCHASE_PRICE),
-            ): selector.EntitySelector(selector.EntitySelectorConfig(domain="sensor")),
+            ): selector.TextSelector(),
         })
 
         return self.async_show_form(
