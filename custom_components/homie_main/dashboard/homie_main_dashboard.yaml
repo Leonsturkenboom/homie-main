@@ -10,7 +10,7 @@
 # Sensors used:
 # - Graph lines: EC power sensors (always W for history)
 # - Display values: HM display sensors (dynamic W/kWh/€)
-# - Price: sensor.hm_price_day_curve
+# - Price line: sensor.ep_purchase_price, display: sensor.hm_price_day_curve
 
 title: Main
 icon: mdi:home
@@ -121,15 +121,21 @@ views:
                 tooltip: false
 
               # Price Graph (Orange)
+              # Line: EP purchase price sensor (has recorder history), Value: HM display sensor
               - type: custom:mini-graph-card
                 name: Price
                 icon: mdi:currency-eur
                 entities:
-                  - entity: sensor.hm_price_day_curve
+                  - entity: sensor.ep_purchase_price
                     name: Price
                     color: "rgba(224, 75, 30, 1)"
                     show_fill: false
                     show_state: false
+                  - entity: sensor.hm_price_day_curve
+                    name: Display
+                    show_line: false
+                    show_points: false
+                    show_state: true
                   - entity: binary_sensor.hm_nighttime
                     name: Nighttime
                     color: transparent

@@ -102,16 +102,22 @@
 
 # ============================================
 # CARD 4: Price Graph (Orange) - for horizontal-stack
+# Line: EP purchase price sensor (has recorder history), Value: HM display sensor
 # ============================================
 - type: custom:mini-graph-card
   name: Purchase P...
   icon: mdi:currency-eur
   entities:
-    - entity: sensor.hm_price_day_curve
+    - entity: sensor.ep_purchase_price
       name: Price
       color: "rgba(224, 75, 30, 1)"
       show_fill: false
       show_state: false
+    - entity: sensor.hm_price_day_curve
+      name: Display
+      show_line: false
+      show_points: false
+      show_state: true
     - entity: binary_sensor.hm_nighttime
       name: Nighttime
       color: transparent
@@ -197,11 +203,16 @@
       name: Purchase P...
       icon: mdi:currency-eur
       entities:
-        - entity: sensor.hm_price_day_curve
+        - entity: sensor.ep_purchase_price
           name: Price
           color: "rgba(224, 75, 30, 1)"
           show_fill: false
           show_state: false
+        - entity: sensor.hm_price_day_curve
+          name: Display
+          show_line: false
+          show_points: false
+          show_state: true
         - entity: binary_sensor.hm_nighttime
           name: Nighttime
           color: transparent
