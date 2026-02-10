@@ -199,13 +199,13 @@ class HMOperatingModeSensor(HMBaseSensor):
 
 
 class HMPriceDayCurveSensor(HMBaseSensor):
-    """Sensor that cycles through today's prices to create a day curve in mini-graph-card.
+    """Write-ahead price sensor for mini-graph-card with hours_to_show: 24.
 
-    Every clock-hour the sensor replays all of today's prices (24 for hourly,
-    96 for 15-min data) in order, advancing to the next price at equal
-    intervals.  With hours_to_show: 1 the recorder history of the last
-    60 minutes contains exactly one complete day-curve plotted left-to-right
-    (00:00 → 23:00).  Labels are hidden so the x-axis is invisible.
+    Each period (hourly or 15-min) the sensor writes one price to the
+    recorder.  When purchase_prices_tomorrow is available (typically 1-2h
+    before midnight) it writes tomorrow's price for the current clock
+    period instead of today's.  This way the recorder history gradually
+    builds a full day-curve that becomes complete ~22h after midnight.
     """
 
     def __init__(self, coordinator: HomieMainCoordinator, entry: ConfigEntry) -> None:
@@ -214,34 +214,33 @@ class HMPriceDayCurveSensor(HMBaseSensor):
         self._attr_icon = "mdi:chart-line"
         self._attr_native_unit_of_measurement = "EUR/kWh"
         self._attr_device_class = SensorDeviceClass.MONETARY
-        self._cycle_index: int = 0
+        self._last_period_idx: int = -1
+        self._last_write_ahead: bool = False
         self._unsub_timer: callback | None = None
 
     # -- lifecycle ---------------------------------------------------------
 
     async def async_added_to_hass(self) -> None:
-        """Start the cycling timer."""
+        """Start the period-check timer."""
         await super().async_added_to_hass()
-        self._sync_cycle_index()
-        # 30-second timer is fast enough for 96 entries (one every 37.5 s)
         self._unsub_timer = async_track_time_interval(
-            self.hass, self._advance_cycle, timedelta(seconds=30)
+            self.hass, self._check_period, timedelta(seconds=30)
         )
 
     async def async_will_remove_from_hass(self) -> None:
-        """Cancel the cycling timer."""
+        """Cancel the timer."""
         if self._unsub_timer:
             self._unsub_timer()
             self._unsub_timer = None
         await super().async_will_remove_from_hass()
 
-    # -- cycling logic -----------------------------------------------------
+    # -- helpers -----------------------------------------------------------
 
-    def _get_sorted_prices(self) -> list[float]:
-        """Return today's prices sorted by start time."""
-        price_state = self.coordinator.data.price_series_state
+    @staticmethod
+    def _parse_prices(raw: list) -> list[float | None]:
+        """Parse a purchase_prices list into a time-sorted price list."""
         entries: list[tuple[datetime, float]] = []
-        for item in price_state.purchase_prices_today:
+        for item in raw:
             if not isinstance(item, dict):
                 continue
             start_str = item.get("start")
@@ -258,51 +257,67 @@ class HMPriceDayCurveSensor(HMBaseSensor):
         entries.sort(key=lambda e: e[0])
         return [p for _, p in entries]
 
-    def _sync_cycle_index(self) -> None:
-        """Map current minute+second within the hour to a price index."""
-        prices = self._get_sorted_prices()
-        n = len(prices) if prices else 1
+    @staticmethod
+    def _period_index(n: int) -> int:
+        """Return the current period index (0..n-1) based on clock time."""
         now = dt_util.now()
-        frac = (now.minute * 60 + now.second) / 3600.0
-        self._cycle_index = int(frac * n) % n
+        if n <= 24:
+            return now.hour % n
+        # 15-min data (n ≈ 96)
+        return (now.hour * 4 + now.minute // 15) % n
+
+    # -- timer callback ----------------------------------------------------
 
     @callback
-    def _advance_cycle(self, _now: datetime) -> None:
-        """Timer callback – advance index and write state if changed."""
-        old = self._cycle_index
-        self._sync_cycle_index()
-        if self._cycle_index != old:
+    def _check_period(self, _now: datetime) -> None:
+        """Write state when the period index or source (today/tomorrow) changes."""
+        ps = self.coordinator.data.price_series_state
+        today = self._parse_prices(ps.purchase_prices_today)
+        tomorrow = self._parse_prices(ps.purchase_prices_tomorrow)
+        n = len(today) or len(tomorrow) or 1
+        idx = self._period_index(n)
+        is_wa = bool(tomorrow)
+
+        if idx != self._last_period_idx or is_wa != self._last_write_ahead:
+            self._last_period_idx = idx
+            self._last_write_ahead = is_wa
             self.async_write_ha_state()
 
     # -- sensor properties -------------------------------------------------
 
     @property
     def native_value(self) -> float | None:
-        """Return the price at the current cycle position."""
-        prices = self._get_sorted_prices()
-        if not prices:
-            return self.coordinator.data.price_series_state.current_price
-        idx = self._cycle_index % len(prices)
-        # Tiny per-index offset so every step is a unique state for the recorder
-        return round(prices[idx] + idx * 1e-7, 7)
+        """Return the write-ahead price (tomorrow if available, else today)."""
+        ps = self.coordinator.data.price_series_state
+        tomorrow = self._parse_prices(ps.purchase_prices_tomorrow)
+        today = self._parse_prices(ps.purchase_prices_today)
+        n = len(today) or len(tomorrow) or 1
+        idx = self._period_index(n)
+
+        if tomorrow and idx < len(tomorrow) and tomorrow[idx] is not None:
+            return tomorrow[idx]
+        if today and idx < len(today) and today[idx] is not None:
+            return today[idx]
+        return ps.current_price
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
         """Expose day-curve metadata."""
-        prices = self._get_sorted_prices()
-        price_state = self.coordinator.data.price_series_state
-        valid = [p for p in prices if p is not None]
-        min_price = min(valid) if valid else None
-        max_price = max(valid) if valid else None
+        ps = self.coordinator.data.price_series_state
+        today = self._parse_prices(ps.purchase_prices_today)
+        tomorrow = self._parse_prices(ps.purchase_prices_tomorrow)
+        is_wa = bool(tomorrow)
+        # Use tomorrow's prices for min/max when in write-ahead mode
+        active = tomorrow if is_wa else today
+        valid = [p for p in active if p is not None]
         return {
-            "prices": prices,
-            "count": len(prices),
-            "cycle_index": self._cycle_index,
-            "min_price": min_price,
-            "max_price": max_price,
+            "count": len(active),
+            "min_price": min(valid) if valid else None,
+            "max_price": max(valid) if valid else None,
+            "is_write_ahead": is_wa,
+            "period_index": self._last_period_idx,
             "last_updated": (
-                price_state.last_updated.isoformat()
-                if price_state.last_updated else None
+                ps.last_updated.isoformat() if ps.last_updated else None
             ),
         }
 
