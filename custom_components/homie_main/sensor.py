@@ -17,7 +17,7 @@ from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
-from homeassistant.helpers.event import async_track_state_change_event
+from homeassistant.helpers.event import async_track_state_change_event, async_track_time_interval
 from homeassistant.util import dt as dt_util
 
 from .const import (
@@ -199,11 +199,13 @@ class HMOperatingModeSensor(HMBaseSensor):
 
 
 class HMPriceDayCurveSensor(HMBaseSensor):
-    """Sensor providing a rolling -12h/+12h price day curve for dashboard visualization.
+    """Sensor that cycles through today's prices to create a day curve in mini-graph-card.
 
-    Reads hourly purchase prices from the EP Purchase Price sensor attributes
-    (purchase_prices_today / purchase_prices_tomorrow) and filters to a 24h
-    window centered on the current time.
+    Every clock-hour the sensor replays all of today's prices (24 for hourly,
+    96 for 15-min data) in order, advancing to the next price at equal
+    intervals.  With hours_to_show: 1 the recorder history of the last
+    60 minutes contains exactly one complete day-curve plotted left-to-right
+    (00:00 → 23:00).  Labels are hidden so the x-axis is invisible.
     """
 
     def __init__(self, coordinator: HomieMainCoordinator, entry: ConfigEntry) -> None:
@@ -212,79 +214,96 @@ class HMPriceDayCurveSensor(HMBaseSensor):
         self._attr_icon = "mdi:chart-line"
         self._attr_native_unit_of_measurement = "EUR/kWh"
         self._attr_device_class = SensorDeviceClass.MONETARY
-        self._attr_state_class = SensorStateClass.MEASUREMENT
+        self._cycle_index: int = 0
+        self._unsub_timer: callback | None = None
 
-    @property
-    def native_value(self) -> float | None:
-        """Return the current purchase price."""
-        return self.coordinator.data.price_series_state.current_price
+    # -- lifecycle ---------------------------------------------------------
 
-    def _build_window(self) -> tuple[list[tuple[str, float]], datetime, datetime]:
-        """Build the -12h/+12h rolling window from today/tomorrow price data.
+    async def async_added_to_hass(self) -> None:
+        """Start the cycling timer."""
+        await super().async_added_to_hass()
+        self._sync_cycle_index()
+        # 30-second timer is fast enough for 96 entries (one every 37.5 s)
+        self._unsub_timer = async_track_time_interval(
+            self.hass, self._advance_cycle, timedelta(seconds=30)
+        )
 
-        Returns (data_points, window_start, window_end) where data_points
-        is a list of (ISO_timestamp, price) tuples.
-        """
-        now = dt_util.now()
-        window_start = now - timedelta(hours=12)
-        window_end = now + timedelta(hours=12)
+    async def async_will_remove_from_hass(self) -> None:
+        """Cancel the cycling timer."""
+        if self._unsub_timer:
+            self._unsub_timer()
+            self._unsub_timer = None
+        await super().async_will_remove_from_hass()
 
+    # -- cycling logic -----------------------------------------------------
+
+    def _get_sorted_prices(self) -> list[float]:
+        """Return today's prices sorted by start time."""
         price_state = self.coordinator.data.price_series_state
-        all_prices = list(price_state.purchase_prices_today) + list(price_state.purchase_prices_tomorrow)
-
-        data_points: list[tuple[str, float]] = []
-
-        for entry in all_prices:
-            if not isinstance(entry, dict):
+        entries: list[tuple[datetime, float]] = []
+        for item in price_state.purchase_prices_today:
+            if not isinstance(item, dict):
                 continue
-
-            start_str = entry.get("start")
-            price = entry.get("price")
+            start_str = item.get("start")
+            price = item.get("price")
             if start_str is None or price is None:
                 continue
-
             try:
                 ts = dt_util.parse_datetime(start_str)
                 if ts is None:
                     continue
-                ts = dt_util.as_local(ts)
-                price_val = float(price)
+                entries.append((ts, float(price)))
             except (ValueError, TypeError):
                 continue
+        entries.sort(key=lambda e: e[0])
+        return [p for _, p in entries]
 
-            if window_start <= ts <= window_end:
-                data_points.append((ts.isoformat(), price_val))
+    def _sync_cycle_index(self) -> None:
+        """Map current minute+second within the hour to a price index."""
+        prices = self._get_sorted_prices()
+        n = len(prices) if prices else 1
+        now = dt_util.now()
+        frac = (now.minute * 60 + now.second) / 3600.0
+        self._cycle_index = int(frac * n) % n
 
-        # Sort by timestamp
-        data_points.sort(key=lambda dp: dp[0])
+    @callback
+    def _advance_cycle(self, _now: datetime) -> None:
+        """Timer callback – advance index and write state if changed."""
+        old = self._cycle_index
+        self._sync_cycle_index()
+        if self._cycle_index != old:
+            self.async_write_ha_state()
 
-        return data_points, window_start, window_end
+    # -- sensor properties -------------------------------------------------
+
+    @property
+    def native_value(self) -> float | None:
+        """Return the price at the current cycle position."""
+        prices = self._get_sorted_prices()
+        if not prices:
+            return self.coordinator.data.price_series_state.current_price
+        idx = self._cycle_index % len(prices)
+        # Tiny per-index offset so every step is a unique state for the recorder
+        return round(prices[idx] + idx * 1e-7, 7)
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
-        """Return the rolling -12h/+12h price window as attributes for graphing."""
+        """Expose day-curve metadata."""
+        prices = self._get_sorted_prices()
         price_state = self.coordinator.data.price_series_state
-        data_points, window_start, window_end = self._build_window()
-
-        times = [dp[0] for dp in data_points]
-        values = [dp[1] for dp in data_points]
-
-        min_price = min(values) if values else None
-        max_price = max(values) if values else None
-        min_time = times[values.index(min_price)] if min_price is not None else None
-        max_time = times[values.index(max_price)] if max_price is not None else None
-
+        valid = [p for p in prices if p is not None]
+        min_price = min(valid) if valid else None
+        max_price = max(valid) if valid else None
         return {
-            "data_points": data_points,
-            "times": times,
-            "values": values,
+            "prices": prices,
+            "count": len(prices),
+            "cycle_index": self._cycle_index,
             "min_price": min_price,
-            "min_time": min_time,
             "max_price": max_price,
-            "max_time": max_time,
-            "window_start": window_start.isoformat(),
-            "window_end": window_end.isoformat(),
-            "last_updated": price_state.last_updated.isoformat() if price_state.last_updated else None,
+            "last_updated": (
+                price_state.last_updated.isoformat()
+                if price_state.last_updated else None
+            ),
         }
 
 
